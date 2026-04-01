@@ -1,5 +1,11 @@
 pluginManagement {
     repositories {
+        // 阿里云镜像（国内）
+        maven { url = uri("https://maven.aliyun.com/repository/google") }
+        maven { url = uri("https://maven.aliyun.com/repository/public") }
+        maven { url = uri("https://maven.aliyun.com/repository/gradle-plugin") }
+
+        // 原始仓库（备用）
         google {
             content {
                 includeGroupByRegex("com\\.android.*")
@@ -17,6 +23,12 @@ plugins {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        // 阿里云镜像（国内）
+        maven { url = uri("https://maven.aliyun.com/repository/google") }
+        maven { url = uri("https://maven.aliyun.com/repository/public") }
+        maven { url = uri("https://maven.aliyun.com/repository/jcenter") }
+
+        // 原始仓库（备用）
         google()
         mavenCentral()
         maven { url = uri("https://jitpack.io") }
