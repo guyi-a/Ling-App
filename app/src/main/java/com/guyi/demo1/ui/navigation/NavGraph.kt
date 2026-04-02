@@ -7,17 +7,23 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.guyi.demo1.ui.components.DrawerContent
 import com.guyi.demo1.ui.screen.auth.LoginScreen
+import com.guyi.demo1.ui.screen.auth.RegisterScreen
 import com.guyi.demo1.ui.screen.chat.ChatScreen
 import com.guyi.demo1.ui.screen.home.WelcomeScreen
+import com.guyi.demo1.ui.screen.profile.ProfileScreen
+import com.guyi.demo1.ui.screen.settings.SettingsScreen
 import com.guyi.demo1.ui.screen.workspace.WorkspaceScreen
 import kotlinx.coroutines.launch
 
 // 路由定义
 sealed class Screen(val route: String) {
     data object Login : Screen("login")
+    data object Register : Screen("register")
     data object Welcome : Screen("welcome")
     data object Chat : Screen("chat")
     data object Workspace : Screen("workspace")
+    data object Settings : Screen("settings")
+    data object Profile : Screen("profile")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -60,7 +66,7 @@ fun NavGraph(
                     scope.launch {
                         drawerState.close()
                     }
-                    // TODO: 跳转到设置页面
+                    navController.navigate(Screen.Settings.route)
                 }
             )
         },
@@ -80,6 +86,26 @@ fun NavGraph(
                                 inclusive = true
                             }
                         }
+                    },
+                    onRegisterClick = {
+                        navController.navigate(Screen.Register.route)
+                    }
+                )
+            }
+
+            // 注册页面
+            composable(Screen.Register.route) {
+                RegisterScreen(
+                    onRegisterSuccess = {
+                        isLoggedIn = true
+                        navController.navigate(Screen.Welcome.route) {
+                            popUpTo(Screen.Login.route) {
+                                inclusive = true
+                            }
+                        }
+                    },
+                    onBackToLogin = {
+                        navController.popBackStack()
                     }
                 )
             }
@@ -170,6 +196,36 @@ fun NavGraph(
                     sessionTitle = title,
                     onBackClick = {
                         navController.popBackStack()
+                    }
+                )
+            }
+
+            // 设置页面
+            composable(Screen.Settings.route) {
+                SettingsScreen(
+                    onBackClick = {
+                        navController.popBackStack()
+                    },
+                    onLogout = {
+                        isLoggedIn = false
+                        navController.navigate(Screen.Login.route) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    },
+                    onProfileClick = {
+                        navController.navigate(Screen.Profile.route)
+                    }
+                )
+            }
+
+            // 个人资料页面
+            composable(Screen.Profile.route) {
+                ProfileScreen(
+                    onBackClick = {
+                        navController.popBackStack()
+                    },
+                    onSaveSuccess = {
+                        // TODO: 显示保存成功提示
                     }
                 )
             }

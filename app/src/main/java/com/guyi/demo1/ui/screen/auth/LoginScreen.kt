@@ -27,7 +27,8 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun LoginScreen(
-    onLoginSuccess: () -> Unit = {}
+    onLoginSuccess: () -> Unit = {},
+    onRegisterClick: () -> Unit = {}
 ) {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -222,7 +223,7 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // 提示文本
-            TextButton(onClick = { /* TODO */ }, enabled = !isLoading) {
+            TextButton(onClick = onRegisterClick, enabled = !isLoading) {
                 Text(
                     "还没有账号？点击注册",
                     color = MaterialTheme.colorScheme.primary
