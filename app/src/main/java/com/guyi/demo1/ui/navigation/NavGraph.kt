@@ -9,6 +9,7 @@ import com.guyi.demo1.ui.components.DrawerContent
 import com.guyi.demo1.ui.screen.auth.LoginScreen
 import com.guyi.demo1.ui.screen.chat.ChatScreen
 import com.guyi.demo1.ui.screen.home.WelcomeScreen
+import com.guyi.demo1.ui.screen.workspace.WorkspaceScreen
 import kotlinx.coroutines.launch
 
 // 路由定义
@@ -16,6 +17,7 @@ sealed class Screen(val route: String) {
     data object Login : Screen("login")
     data object Welcome : Screen("welcome")
     data object Chat : Screen("chat")
+    data object Workspace : Screen("workspace")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -113,6 +115,9 @@ fun NavGraph(
                         scope.launch {
                             drawerState.open()
                         }
+                    },
+                    onWorkspaceClick = {
+                        navController.navigate("${Screen.Workspace.route}/new?title=新对话")
                     }
                 )
             }
@@ -130,13 +135,16 @@ fun NavGraph(
                         scope.launch {
                             drawerState.open()
                         }
+                    },
+                    onWorkspaceClick = {
+                        navController.navigate("${Screen.Workspace.route}/new?title=新对话")
                     }
                 )
             }
 
             // 历史会话的聊天页面
             composable("chat/{sessionId}") { backStackEntry ->
-                val sessionId = backStackEntry.arguments?.getString("sessionId")
+                val sessionId = backStackEntry.arguments?.getString("sessionId") ?: ""
                 ChatScreen(
                     sessionId = sessionId,
                     onBackClick = {
@@ -146,6 +154,22 @@ fun NavGraph(
                         scope.launch {
                             drawerState.open()
                         }
+                    },
+                    onWorkspaceClick = {
+                        navController.navigate("${Screen.Workspace.route}/$sessionId?title=会话 #$sessionId")
+                    }
+                )
+            }
+
+            // 工作区文件管理
+            composable("${Screen.Workspace.route}/{sessionId}?title={title}") { backStackEntry ->
+                val sessionId = backStackEntry.arguments?.getString("sessionId") ?: ""
+                val title = backStackEntry.arguments?.getString("title") ?: "当前会话"
+                WorkspaceScreen(
+                    sessionId = sessionId,
+                    sessionTitle = title,
+                    onBackClick = {
+                        navController.popBackStack()
                     }
                 )
             }

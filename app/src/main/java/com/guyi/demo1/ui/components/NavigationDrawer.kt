@@ -5,14 +5,15 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -23,8 +24,17 @@ data class SessionItem(
     val title: String,
     val lastMessage: String,
     val timestamp: String,
-    val messageCount: Int
+    val messageCount: Int,
+    val timeGroup: TimeGroup = TimeGroup.OLDER
 )
+
+// 时间分组枚举
+enum class TimeGroup(val label: String) {
+    TODAY("今天"),
+    YESTERDAY("昨天"),
+    THIS_WEEK("本周"),
+    OLDER("更早")
+}
 
 @Composable
 fun DrawerContent(
@@ -32,52 +42,86 @@ fun DrawerContent(
     onNewChatClick: () -> Unit = {},
     onSettingsClick: () -> Unit = {}
 ) {
+    // 搜索关键词
+    var searchQuery by remember { mutableStateOf("") }
+
     // 模拟会话列表数据
-    val sessions = remember {
+    val allSessions = remember {
         listOf(
             SessionItem(
                 id = "1",
                 title = "数据分析讨论",
                 lastMessage = "帮我分析一下销售数据的趋势...",
                 timestamp = "今天 10:30",
-                messageCount = 15
+                messageCount = 15,
+                timeGroup = TimeGroup.TODAY
             ),
             SessionItem(
                 id = "2",
                 title = "代码优化建议",
                 lastMessage = "这段代码可以怎么优化？",
-                timestamp = "昨天",
-                messageCount = 8
+                timestamp = "今天 09:15",
+                messageCount = 8,
+                timeGroup = TimeGroup.TODAY
             ),
             SessionItem(
                 id = "3",
                 title = "报告生成",
                 lastMessage = "生成一份季度销售报告",
-                timestamp = "2天前",
-                messageCount = 23
+                timestamp = "昨天 15:20",
+                messageCount = 23,
+                timeGroup = TimeGroup.YESTERDAY
             ),
             SessionItem(
                 id = "4",
                 title = "Python 编程问题",
                 lastMessage = "如何使用 pandas 处理缺失值？",
-                timestamp = "3天前",
-                messageCount = 12
+                timestamp = "昨天 11:05",
+                messageCount = 12,
+                timeGroup = TimeGroup.YESTERDAY
             ),
             SessionItem(
                 id = "5",
                 title = "新闻搜索",
                 lastMessage = "搜索最近的AI技术新闻",
-                timestamp = "1周前",
-                messageCount = 6
+                timestamp = "3天前",
+                messageCount = 6,
+                timeGroup = TimeGroup.THIS_WEEK
             ),
             SessionItem(
                 id = "6",
                 title = "创意头脑风暴",
                 lastMessage = "帮我想一些营销创意",
                 timestamp = "1周前",
-                messageCount = 10
+                messageCount = 10,
+                timeGroup = TimeGroup.OLDER
+            ),
+            SessionItem(
+                id = "7",
+                title = "机器学习入门",
+                lastMessage = "推荐一些机器学习的学习资源",
+                timestamp = "2周前",
+                messageCount = 18,
+                timeGroup = TimeGroup.OLDER
             )
         )
+    }
+
+    // 根据搜索过滤会话
+    val filteredSessions = remember(searchQuery, allSessions) {
+        if (searchQuery.isBlank()) {
+            allSessions
+        } else {
+            allSessions.filter {
+                it.title.contains(searchQuery, ignoreCase = true) ||
+                        it.lastMessage.contains(searchQuery, ignoreCase = true)
+            }
+        }
+    }
+
+    // 按时间分组
+    val groupedSessions = remember(filteredSessions) {
+        filteredSessions.groupBy { it.timeGroup }
     }
 
     ModalDrawerSheet(
@@ -108,9 +152,11 @@ fun DrawerContent(
                                 modifier = Modifier.fillMaxSize(),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = "🤖",
-                                    style = MaterialTheme.typography.headlineMedium
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = "Ling Agent",
+                                    modifier = Modifier.size(28.dp),
+                                    tint = MaterialTheme.colorScheme.onPrimary
                                 )
                             }
                         }
@@ -132,11 +178,68 @@ fun DrawerContent(
                 }
             }
 
+            // 搜索框
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    BasicTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        decorationBox = { innerTextField ->
+                            if (searchQuery.isEmpty()) {
+                                Text(
+                                    text = "搜索会话...",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                )
+                            }
+                            innerTextField()
+                        }
+                    )
+
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(
+                            onClick = { searchQuery = "" },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Clear,
+                                contentDescription = "清除",
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
             // 新建对话按钮
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
                     .clickable(onClick = onNewChatClick),
                 shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(
@@ -152,7 +255,7 @@ fun DrawerContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        Icons.Default.Add,
+                        Icons.Default.AddCircle,
                         contentDescription = "新建对话",
                         tint = MaterialTheme.colorScheme.onPrimary
                     )
@@ -168,24 +271,49 @@ fun DrawerContent(
 
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
-            // 历史会话列表
-            Text(
-                "最近对话",
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            // 历史会话列表（分组显示）
+            if (filteredSessions.isEmpty()) {
+                // 空状态
+                EmptyStateCompact(
+                    icon = if (searchQuery.isBlank()) "📭" else "🔍",
+                    message = if (searchQuery.isBlank()) "暂无会话记录" else "未找到匹配的会话"
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // 按时间分组展示
+                    TimeGroup.entries.forEach { group ->
+                        val sessionsInGroup = groupedSessions[group] ?: emptyList()
+                        if (sessionsInGroup.isNotEmpty()) {
+                            // 分组标题
+                            item(key = "header_$group") {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 4.dp, top = 8.dp, bottom = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "${group.label} (${sessionsInGroup.size})",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
 
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(sessions, key = { it.id }) { session ->
-                    SessionDrawerItem(
-                        session = session,
-                        onClick = { onSessionClick(session.id) }
-                    )
+                            // 分组内的会话列表
+                            items(sessionsInGroup, key = { it.id }) { session ->
+                                SessionDrawerItem(
+                                    session = session,
+                                    onClick = { onSessionClick(session.id) }
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -252,11 +380,27 @@ fun SessionDrawerItem(
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = session.timestamp,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = session.timestamp,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                    ) {
+                        Text(
+                            text = "${session.messageCount} 条",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
             }
 
             IconButton(
@@ -264,7 +408,7 @@ fun SessionDrawerItem(
                 modifier = Modifier.size(32.dp)
             ) {
                 Icon(
-                    Icons.Default.Delete,
+                    Icons.Outlined.Delete,
                     contentDescription = "删除",
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(18.dp)
@@ -275,24 +419,14 @@ fun SessionDrawerItem(
 
     // 删除确认对话框
     if (showDeleteDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = false },
-            title = { Text("删除对话") },
-            text = { Text("确定要删除「${session.title}」吗？此操作无法撤销。") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        // TODO: 实际删除逻辑
-                        showDeleteDialog = false
-                    }
-                ) {
-                    Text("删除", color = MaterialTheme.colorScheme.error)
-                }
+        DeleteConfirmDialog(
+            itemName = session.title,
+            onConfirm = {
+                // TODO: 实际删除逻辑
+                showDeleteDialog = false
             },
-            dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) {
-                    Text("取消")
-                }
+            onDismiss = {
+                showDeleteDialog = false
             }
         )
     }

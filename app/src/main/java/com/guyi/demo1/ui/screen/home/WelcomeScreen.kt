@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -64,9 +65,11 @@ fun WelcomeScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "🤖",
-                        style = MaterialTheme.typography.displayMedium
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = "Ling Agent",
+                        modifier = Modifier.size(56.dp),
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }
