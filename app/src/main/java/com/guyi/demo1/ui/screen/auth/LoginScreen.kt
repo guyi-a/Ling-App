@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -24,19 +25,37 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.guyi.demo1.LingAgentApplication
 
 @Composable
 fun LoginScreen(
     onLoginSuccess: () -> Unit = {},
     onRegisterClick: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val appContainer = (context.applicationContext as LingAgentApplication).container
+    val viewModel: LoginViewModel = viewModel(
+        factory = LoginViewModelFactory(appContainer.authRepository)
+    )
+
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
-    var isLoading by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf("") }
 
+    val uiState by viewModel.uiState.collectAsState()
     val focusManager = LocalFocusManager.current
+
+    // 监听登录状态
+    LaunchedEffect(uiState) {
+        when (uiState) {
+            is LoginUiState.Success -> {
+                onLoginSuccess()
+                viewModel.resetState()
+            }
+            else -> {}
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -113,7 +132,9 @@ fun LoginScreen(
                         value = username,
                         onValueChange = {
                             username = it
-                            errorMessage = ""
+                            if (uiState is LoginUiState.Error) {
+                                viewModel.resetState()
+                            }
                         },
                         label = { Text("用户名") },
                         singleLine = true,
@@ -126,7 +147,7 @@ fun LoginScreen(
                         keyboardActions = KeyboardActions(
                             onNext = { focusManager.moveFocus(FocusDirection.Down) }
                         ),
-                        enabled = !isLoading
+                        enabled = uiState !is LoginUiState.Loading
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -136,7 +157,9 @@ fun LoginScreen(
                         value = password,
                         onValueChange = {
                             password = it
-                            errorMessage = ""
+                            if (uiState is LoginUiState.Error) {
+                                viewModel.resetState()
+                            }
                         },
                         label = { Text("密码") },
                         singleLine = true,
@@ -167,19 +190,18 @@ fun LoginScreen(
                             onDone = {
                                 focusManager.clearFocus()
                                 if (username.isNotBlank() && password.isNotBlank()) {
-                                    isLoading = true
-                                    errorMessage = ""
+                                    viewModel.login(username, password)
                                 }
                             }
                         ),
-                        enabled = !isLoading
+                        enabled = uiState !is LoginUiState.Loading
                     )
 
                     // 错误提示
-                    if (errorMessage.isNotEmpty()) {
+                    if (uiState is LoginUiState.Error) {
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = errorMessage,
+                            text = (uiState as LoginUiState.Error).message,
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall
                         )
@@ -190,20 +212,15 @@ fun LoginScreen(
                     // 登录按钮
                     Button(
                         onClick = {
-                            if (username.isBlank() || password.isBlank()) {
-                                errorMessage = "请输入用户名和密码"
-                                return@Button
-                            }
-                            isLoading = true
-                            errorMessage = ""
+                            viewModel.login(username, password)
                         },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp),
                         shape = RoundedCornerShape(12.dp),
-                        enabled = !isLoading && username.isNotBlank() && password.isNotBlank()
+                        enabled = uiState !is LoginUiState.Loading && username.isNotBlank() && password.isNotBlank()
                     ) {
-                        if (isLoading) {
+                        if (uiState is LoginUiState.Loading) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(24.dp),
                                 color = MaterialTheme.colorScheme.onPrimary,
@@ -223,7 +240,7 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // 提示文本
-            TextButton(onClick = onRegisterClick, enabled = !isLoading) {
+            TextButton(onClick = onRegisterClick, enabled = uiState !is LoginUiState.Loading) {
                 Text(
                     "还没有账号？点击注册",
                     color = MaterialTheme.colorScheme.primary
@@ -232,16 +249,4 @@ fun LoginScreen(
         }
     }
 
-    // 模拟登录逻辑
-    LaunchedEffect(isLoading) {
-        if (isLoading) {
-            kotlinx.coroutines.delay(1500)
-            if (username.isNotBlank() && password.isNotBlank()) {
-                onLoginSuccess()
-            } else {
-                errorMessage = "用户名或密码错误"
-                isLoading = false
-            }
-        }
-    }
 }

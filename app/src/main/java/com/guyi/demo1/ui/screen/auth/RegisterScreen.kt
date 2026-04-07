@@ -25,6 +25,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.guyi.demo1.LingAgentApplication
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.delay
 
 /**
  * 密码强度等级
@@ -40,16 +44,39 @@ fun RegisterScreen(
     onRegisterSuccess: () -> Unit = {},
     onBackToLogin: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val appContainer = (context.applicationContext as LingAgentApplication).container
+    val viewModel: RegisterViewModel = viewModel(
+        factory = RegisterViewModelFactory(appContainer.authRepository)
+    )
+
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var confirmPasswordVisible by remember { mutableStateOf(false) }
     var agreeToTerms by remember { mutableStateOf(false) }
-    var isLoading by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf("") }
+    var countdown by remember { mutableStateOf(0) }
 
+    val uiState by viewModel.uiState.collectAsState()
     val focusManager = LocalFocusManager.current
+
+    // 监听注册状态
+    LaunchedEffect(uiState) {
+        when (uiState) {
+            is RegisterUiState.Success -> {
+                // 开始倒计时
+                countdown = 2
+                while (countdown > 0) {
+                    delay(1000)
+                    countdown--
+                }
+                onRegisterSuccess()
+                viewModel.resetState()
+            }
+            else -> {}
+        }
+    }
 
     // 计算密码强度
     val passwordStrength = remember(password) {
@@ -142,7 +169,9 @@ fun RegisterScreen(
                         value = username,
                         onValueChange = {
                             username = it
-                            errorMessage = ""
+                            if (uiState is RegisterUiState.Error) {
+                                viewModel.resetState()
+                            }
                         },
                         label = { Text("用户名") },
                         singleLine = true,
@@ -155,7 +184,7 @@ fun RegisterScreen(
                         keyboardActions = KeyboardActions(
                             onNext = { focusManager.moveFocus(FocusDirection.Down) }
                         ),
-                        enabled = !isLoading,
+                        enabled = uiState !is RegisterUiState.Loading,
                         trailingIcon = {
                             if (username.length >= 3) {
                                 Icon(
@@ -174,7 +203,9 @@ fun RegisterScreen(
                         value = password,
                         onValueChange = {
                             password = it
-                            errorMessage = ""
+                            if (uiState is RegisterUiState.Error) {
+                                viewModel.resetState()
+                            }
                         },
                         label = { Text("密码") },
                         singleLine = true,
@@ -204,7 +235,7 @@ fun RegisterScreen(
                         keyboardActions = KeyboardActions(
                             onNext = { focusManager.moveFocus(FocusDirection.Down) }
                         ),
-                        enabled = !isLoading
+                        enabled = uiState !is RegisterUiState.Loading
                     )
 
                     // 密码强度指示器
@@ -241,7 +272,9 @@ fun RegisterScreen(
                         value = confirmPassword,
                         onValueChange = {
                             confirmPassword = it
-                            errorMessage = ""
+                            if (uiState is RegisterUiState.Error) {
+                                viewModel.resetState()
+                            }
                         },
                         label = { Text("确认密码") },
                         singleLine = true,
@@ -271,7 +304,7 @@ fun RegisterScreen(
                         keyboardActions = KeyboardActions(
                             onDone = { focusManager.clearFocus() }
                         ),
-                        enabled = !isLoading,
+                        enabled = uiState !is RegisterUiState.Loading,
                         isError = confirmPassword.isNotEmpty() && !passwordsMatch,
                         supportingText = {
                             if (confirmPassword.isNotEmpty()) {
@@ -300,7 +333,7 @@ fun RegisterScreen(
                         Checkbox(
                             checked = agreeToTerms,
                             onCheckedChange = { agreeToTerms = it },
-                            enabled = !isLoading
+                            enabled = uiState !is RegisterUiState.Loading
                         )
                         Text(
                             text = "我已阅读并同意用户协议和隐私政策",
@@ -310,10 +343,10 @@ fun RegisterScreen(
                     }
 
                     // 错误提示
-                    if (errorMessage.isNotEmpty()) {
+                    if (uiState is RegisterUiState.Error) {
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = errorMessage,
+                            text = (uiState as RegisterUiState.Error).message,
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall
                         )
@@ -324,26 +357,19 @@ fun RegisterScreen(
                     // 注册按钮
                     Button(
                         onClick = {
-                            when {
-                                username.isBlank() -> errorMessage = "请输入用户名"
-                                username.length < 3 -> errorMessage = "用户名至少 3 个字符"
-                                password.isBlank() -> errorMessage = "请输入密码"
-                                password.length < 6 -> errorMessage = "密码至少 6 个字符"
-                                !passwordsMatch -> errorMessage = "两次密码不一致"
-                                !agreeToTerms -> errorMessage = "请阅读并同意用户协议"
-                                else -> {
-                                    isLoading = true
-                                    errorMessage = ""
-                                }
-                            }
+                            viewModel.register(username, password)
                         },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp),
                         shape = RoundedCornerShape(12.dp),
-                        enabled = !isLoading
+                        enabled = uiState !is RegisterUiState.Loading &&
+                                username.length >= 3 &&
+                                password.length >= 6 &&
+                                passwordsMatch &&
+                                agreeToTerms
                     ) {
-                        if (isLoading) {
+                        if (uiState is RegisterUiState.Loading) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(24.dp),
                                 color = MaterialTheme.colorScheme.onPrimary,
@@ -362,25 +388,51 @@ fun RegisterScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // 注册成功提示（带倒计时）
+            if (uiState is RegisterUiState.Success && countdown > 0) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "注册成功！${countdown} 秒后返回登录",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
             // 返回登录
             TextButton(
                 onClick = onBackToLogin,
-                enabled = !isLoading
+                enabled = uiState !is RegisterUiState.Loading && countdown == 0
             ) {
                 Text(
                     "已有账号？返回登录",
                     color = MaterialTheme.colorScheme.primary
                 )
             }
-        }
-    }
-
-    // 模拟注册逻辑
-    LaunchedEffect(isLoading) {
-        if (isLoading) {
-            kotlinx.coroutines.delay(1500)
-            // TODO: 实际注册 API 调用
-            onRegisterSuccess()
         }
     }
 }

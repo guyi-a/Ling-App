@@ -1,9 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
-    // 暂时注释掉 Hilt，先让项目能运行
-    // alias(libs.plugins.ksp)
-    // alias(libs.plugins.hilt)
+    kotlin("plugin.serialization") version "2.2.10"
 }
 
 android {
@@ -52,21 +50,19 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation("androidx.compose.material:material-icons-extended")
 
-    // Hilt - 暂时注释掉
-    // implementation(libs.hilt.android)
-    // ksp(libs.hilt.compiler)
-    // implementation(libs.hilt.navigation.compose)
+    // Network
+    implementation(libs.retrofit)
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.logging)
+    implementation("com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter:1.0.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
 
-    // Network - 暂时注释掉
-    // implementation(libs.retrofit)
-    // implementation(libs.retrofit.converter.gson)
-    // implementation(libs.okhttp)
-    // implementation(libs.okhttp.logging)
-    // implementation(libs.okhttp.eventsource)
-    // implementation(libs.gson)
+    // DataStore
+    implementation(libs.datastore.preferences)
 
-    // DataStore - 暂时注释掉
-    // implementation(libs.datastore.preferences)
+    // ViewModel
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
 
     // Navigation
     implementation(libs.navigation.compose)

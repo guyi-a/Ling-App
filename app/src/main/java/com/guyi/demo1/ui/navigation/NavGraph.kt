@@ -97,12 +97,8 @@ fun NavGraph(
             composable(Screen.Register.route) {
                 RegisterScreen(
                     onRegisterSuccess = {
-                        isLoggedIn = true
-                        navController.navigate(Screen.Welcome.route) {
-                            popUpTo(Screen.Login.route) {
-                                inclusive = true
-                            }
-                        }
+                        // 注册成功，返回登录页
+                        navController.popBackStack()
                     },
                     onBackToLogin = {
                         navController.popBackStack()

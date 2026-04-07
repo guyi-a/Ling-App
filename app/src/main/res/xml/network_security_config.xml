@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- 允许明文 HTTP 通信（仅开发环境） -->
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- Android 模拟器访问本机 -->
+        <domain includeSubdomains="true">10.0.2.2</domain>
+        <!-- localhost -->
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+    </domain-config>
+</network-security-config>
