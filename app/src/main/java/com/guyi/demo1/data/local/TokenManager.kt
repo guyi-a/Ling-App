@@ -20,44 +20,44 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 class TokenManager(private val context: Context) {
 
     private val tokenKey = stringPreferencesKey("access_token")
+    private val userIdKey = stringPreferencesKey("user_id")
+    private val usernameKey = stringPreferencesKey("username")
 
-    /**
-     * 保存 Token
-     */
     suspend fun saveToken(token: String) {
-        context.dataStore.edit { preferences ->
-            preferences[tokenKey] = token
+        context.dataStore.edit { it[tokenKey] = token }
+    }
+
+    suspend fun saveUserInfo(userId: String, username: String) {
+        context.dataStore.edit {
+            it[userIdKey] = userId
+            it[usernameKey] = username
         }
     }
 
-    /**
-     * 获取 Token（挂起函数）
-     */
     suspend fun getToken(): String? {
         return context.dataStore.data.first()[tokenKey]
     }
 
-    /**
-     * 获取 Token（Flow）
-     */
-    fun getTokenFlow(): Flow<String?> {
-        return context.dataStore.data.map { preferences ->
-            preferences[tokenKey]
-        }
+    suspend fun getUserId(): String? {
+        return context.dataStore.data.first()[userIdKey]
     }
 
-    /**
-     * 清除 Token（登出）
-     */
+    suspend fun getUsername(): String? {
+        return context.dataStore.data.first()[usernameKey]
+    }
+
+    fun getUsernameFlow(): Flow<String?> {
+        return context.dataStore.data.map { it[usernameKey] }
+    }
+
+    fun getUserIdFlow(): Flow<String?> {
+        return context.dataStore.data.map { it[userIdKey] }
+    }
+
     suspend fun clearToken() {
-        context.dataStore.edit { preferences ->
-            preferences.remove(tokenKey)
-        }
+        context.dataStore.edit { it.clear() }
     }
 
-    /**
-     * 检查 Token 是否存在
-     */
     suspend fun hasToken(): Boolean {
         return getToken() != null
     }

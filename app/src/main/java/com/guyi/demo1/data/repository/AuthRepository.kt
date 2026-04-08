@@ -3,6 +3,7 @@ package com.guyi.demo1.data.repository
 import android.content.Context
 import com.guyi.demo1.data.api.AuthApi
 import com.guyi.demo1.data.local.TokenManager
+import com.guyi.demo1.data.api.ChangePasswordRequest
 import com.guyi.demo1.data.model.LoginRequest
 import com.guyi.demo1.data.model.RegisterRequest
 import com.guyi.demo1.data.model.User
@@ -23,9 +24,8 @@ class AuthRepository(
     suspend fun login(username: String, password: String): Result<User> {
         return try {
             val response = authApi.login(LoginRequest(username, password))
-            // 保存 Token
             tokenManager.saveToken(response.accessToken)
-            // 将响应转换为 User 对象
+            tokenManager.saveUserInfo(response.userId, response.username)
             val user = User(
                 userId = response.userId,
                 username = response.username,
@@ -74,6 +74,18 @@ class AuthRepository(
             Result.success(user)
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    /**
+     * 修改密码
+     */
+    suspend fun changePassword(oldPassword: String, newPassword: String): Result<Unit> {
+        return try {
+            authApi.changePassword(ChangePasswordRequest(oldPassword, newPassword))
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(parseException(e))
         }
     }
 

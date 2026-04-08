@@ -10,6 +10,8 @@ import com.guyi.demo1.ui.screen.auth.LoginScreen
 import com.guyi.demo1.ui.screen.auth.RegisterScreen
 import com.guyi.demo1.ui.screen.chat.ChatScreen
 import com.guyi.demo1.ui.screen.home.WelcomeScreen
+import com.guyi.demo1.ui.screen.profile.AccountSecurityScreen
+import com.guyi.demo1.ui.screen.profile.ChangePasswordScreen
 import com.guyi.demo1.ui.screen.profile.ProfileScreen
 import com.guyi.demo1.ui.screen.settings.SettingsScreen
 import com.guyi.demo1.ui.screen.workspace.WorkspaceScreen
@@ -24,6 +26,8 @@ sealed class Screen(val route: String) {
     data object Workspace : Screen("workspace")
     data object Settings : Screen("settings")
     data object Profile : Screen("profile")
+    data object ChangePassword : Screen("change_password")
+    data object AccountSecurity : Screen("account_security")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -110,18 +114,18 @@ fun NavGraph(
             composable(Screen.Welcome.route) {
                 WelcomeScreen(
                     onStartChat = {
-                        // 开始新对话
                         navController.navigate(Screen.Chat.route)
                     },
                     onMenuClick = {
-                        // 打开侧边抽屉
                         scope.launch {
                             drawerState.open()
                         }
                     },
                     onExampleClick = { example ->
-                        // 点击示例问题，带着问题进入聊天页
                         navController.navigate("${Screen.Chat.route}?message=$example")
+                    },
+                    onProfileClick = {
+                        navController.navigate(Screen.Profile.route)
                     }
                 )
             }
@@ -138,8 +142,8 @@ fun NavGraph(
                             drawerState.open()
                         }
                     },
-                    onWorkspaceClick = {
-                        navController.navigate("${Screen.Workspace.route}/new?title=新对话")
+                    onWorkspaceClick = { sid ->
+                        navController.navigate("${Screen.Workspace.route}/$sid?title=当前会话")
                     }
                 )
             }
@@ -158,8 +162,8 @@ fun NavGraph(
                             drawerState.open()
                         }
                     },
-                    onWorkspaceClick = {
-                        navController.navigate("${Screen.Workspace.route}/new?title=新对话")
+                    onWorkspaceClick = { sid ->
+                        navController.navigate("${Screen.Workspace.route}/$sid?title=当前会话")
                     }
                 )
             }
@@ -177,8 +181,8 @@ fun NavGraph(
                             drawerState.open()
                         }
                     },
-                    onWorkspaceClick = {
-                        navController.navigate("${Screen.Workspace.route}/$sessionId?title=会话 #$sessionId")
+                    onWorkspaceClick = { sid ->
+                        navController.navigate("${Screen.Workspace.route}/$sid?title=会话 #${sid.take(8)}")
                     }
                 )
             }
@@ -208,8 +212,8 @@ fun NavGraph(
                             popUpTo(0) { inclusive = true }
                         }
                     },
-                    onProfileClick = {
-                        navController.navigate(Screen.Profile.route)
+                    onChangePasswordClick = {
+                        navController.navigate(Screen.ChangePassword.route)
                     }
                 )
             }
@@ -217,12 +221,29 @@ fun NavGraph(
             // 个人资料页面
             composable(Screen.Profile.route) {
                 ProfileScreen(
-                    onBackClick = {
-                        navController.popBackStack()
-                    },
-                    onSaveSuccess = {
-                        // TODO: 显示保存成功提示
+                    onBackClick = { navController.popBackStack() },
+                    onSaveSuccess = {},
+                    onAccountSecurityClick = { navController.navigate(Screen.AccountSecurity.route) }
+                )
+            }
+
+            // 修改密码
+            composable(Screen.ChangePassword.route) {
+                ChangePasswordScreen(
+                    onBackClick = { navController.popBackStack() },
+                    onPasswordChanged = {
+                        isLoggedIn = false
+                        navController.navigate(Screen.Login.route) {
+                            popUpTo(0) { inclusive = true }
+                        }
                     }
+                )
+            }
+
+            // 账号安全
+            composable(Screen.AccountSecurity.route) {
+                AccountSecurityScreen(
+                    onBackClick = { navController.popBackStack() }
                 )
             }
         }

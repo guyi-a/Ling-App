@@ -1,9 +1,11 @@
 package com.guyi.demo1.data.api
 
+import com.guyi.demo1.data.model.ApiResponse
 import com.guyi.demo1.data.model.LoginRequest
 import com.guyi.demo1.data.model.LoginResponse
 import com.guyi.demo1.data.model.RegisterRequest
 import com.guyi.demo1.data.model.User
+import kotlinx.serialization.Serializable
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
@@ -30,4 +32,16 @@ interface AuthApi {
      */
     @GET("/api/users/me")
     suspend fun getCurrentUser(): User
+
+    /**
+     * 修改密码
+     */
+    @POST("/api/auth/change-password")
+    suspend fun changePassword(@Body request: ChangePasswordRequest): ApiResponse<Unit>
 }
+
+@Serializable
+data class ChangePasswordRequest(
+    val old_password: String,
+    val new_password: String
+)

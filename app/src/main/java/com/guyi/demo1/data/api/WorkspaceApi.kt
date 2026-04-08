@@ -1,8 +1,8 @@
 package com.guyi.demo1.data.api
 
-import com.guyi.demo1.data.model.ApiResponse
+import com.guyi.demo1.data.model.FileDeleteResponse
+import com.guyi.demo1.data.model.FileListResponse
 import com.guyi.demo1.data.model.FileUploadResponse
-import com.guyi.demo1.data.model.WorkspaceFile
 import okhttp3.MultipartBody
 import okhttp3.ResponseBody
 import retrofit2.http.DELETE
@@ -11,6 +11,7 @@ import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.Part
 import retrofit2.http.Path
+import retrofit2.http.Query
 import retrofit2.http.Streaming
 
 /**
@@ -32,7 +33,10 @@ interface WorkspaceApi {
      * 获取工作区文件列表
      */
     @GET("/api/workspace/{session_id}/files")
-    suspend fun getFiles(@Path("session_id") sessionId: String): List<WorkspaceFile>
+    suspend fun getFiles(
+        @Path("session_id") sessionId: String,
+        @Query("folder") folder: String? = null
+    ): FileListResponse
 
     /**
      * 下载文件
@@ -53,5 +57,5 @@ interface WorkspaceApi {
         @Path("session_id") sessionId: String,
         @Path("folder") folder: String,
         @Path("filename") filename: String
-    ): ApiResponse<Unit>
+    ): FileDeleteResponse
 }

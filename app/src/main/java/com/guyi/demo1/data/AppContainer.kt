@@ -5,13 +5,16 @@ import com.guyi.demo1.data.api.AuthApi
 import com.guyi.demo1.data.api.ChatApi
 import com.guyi.demo1.data.api.MessageApi
 import com.guyi.demo1.data.api.SessionApi
+import com.guyi.demo1.data.api.UserApi
 import com.guyi.demo1.data.api.WorkspaceApi
+import com.guyi.demo1.data.local.ThemeManager
 import com.guyi.demo1.data.local.TokenManager
 import com.guyi.demo1.data.network.RetrofitClient
 import com.guyi.demo1.data.network.SSEManager
 import com.guyi.demo1.data.repository.AuthRepository
 import com.guyi.demo1.data.repository.SessionRepository
 import com.guyi.demo1.data.repository.MessageRepository
+import com.guyi.demo1.data.repository.WorkspaceRepository
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -22,6 +25,9 @@ class AppContainer(context: Context) {
 
     // Token 管理器
     val tokenManager = TokenManager(context)
+
+    // 主题管理器
+    val themeManager = ThemeManager(context)
 
     // OkHttp 客户端
     private val okHttpClient = RetrofitClient.createOkHttpClient {
@@ -36,6 +42,7 @@ class AppContainer(context: Context) {
     val sessionApi: SessionApi = RetrofitClient.createService(retrofit)
     val chatApi: ChatApi = RetrofitClient.createService(retrofit)
     val messageApi: MessageApi = RetrofitClient.createService(retrofit)
+    val userApi: UserApi = RetrofitClient.createService(retrofit)
     val workspaceApi: WorkspaceApi = RetrofitClient.createService(retrofit)
 
     // SSE 管理器
@@ -45,4 +52,5 @@ class AppContainer(context: Context) {
     val authRepository = AuthRepository(context, authApi, tokenManager)
     val sessionRepository = SessionRepository(sessionApi)
     val messageRepository = MessageRepository(messageApi)
+    val workspaceRepository = WorkspaceRepository(workspaceApi, context)
 }

@@ -17,8 +17,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -51,7 +51,8 @@ class ChatViewModel(
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
     private var streamingJob: Job? = null
-    private val json = Json { ignoreUnknownKeys = true }
+
+    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
     init {
         // 如果有会话 ID，加载历史消息
@@ -62,6 +63,7 @@ class ChatViewModel(
 
     /**
      * 加载会话历史
+     * 参考 web 端逻辑：解析 extra_data 中的 tool_calls，跳过 tool 角色消息，合并连续同角色消息
      */
     fun loadHistory(sessionId: String) {
         viewModelScope.launch {
@@ -69,21 +71,59 @@ class ChatViewModel(
             if (result.isSuccess) {
                 val history = result.getOrNull()
                 if (history != null) {
-                    val messages = history.messages.map { historyMsg ->
-                        Message(
-                            id = UUID.randomUUID().toString(),
-                            messageId = historyMsg.messageId,
-                            role = historyMsg.role,
-                            parts = listOf(
-                                MessagePart(
-                                    type = "text",
-                                    content = historyMsg.content
-                                )
+                    // Step 1: 转换每条消息为带 parts 的 Message，跳过 tool 角色
+                    val rawMessages = history.messages
+                        .filter { it.role == "user" || it.role == "assistant" }
+                        .mapIndexed { idx, historyMsg ->
+                            val parts = mutableListOf<MessagePart>()
+
+                            // 解析 extra_data
+                            val toolCalls = parseToolCalls(historyMsg.extraData)
+
+                            if (historyMsg.role == "assistant" && toolCalls.isNotEmpty()) {
+                                // assistant 消息带 tool_calls：先文本，再工具
+                                if (historyMsg.content.isNotBlank()) {
+                                    parts.add(MessagePart(type = "text", content = historyMsg.content))
+                                }
+                                toolCalls.forEach { toolName ->
+                                    parts.add(MessagePart(
+                                        type = "tool",
+                                        toolName = toolName,
+                                        toolStatus = "done"
+                                    ))
+                                }
+                            } else {
+                                // 普通消息
+                                if (historyMsg.content.isNotBlank()) {
+                                    parts.add(MessagePart(type = "text", content = historyMsg.content))
+                                }
+                            }
+
+                            Message(
+                                id = "history-$sessionId-$idx",
+                                messageId = historyMsg.messageId,
+                                role = historyMsg.role,
+                                parts = parts
                             )
-                        )
+                        }
+                        .filter { it.parts.isNotEmpty() }
+
+                    // Step 2: 合并连续同角色消息
+                    val mergedMessages = mutableListOf<Message>()
+                    for (msg in rawMessages) {
+                        val lastMsg = mergedMessages.lastOrNull()
+                        if (lastMsg != null && lastMsg.role == msg.role) {
+                            // 合并 parts 到上一条消息
+                            mergedMessages[mergedMessages.lastIndex] = lastMsg.copy(
+                                parts = lastMsg.parts + msg.parts
+                            )
+                        } else {
+                            mergedMessages.add(msg)
+                        }
                     }
+
                     _uiState.value = _uiState.value.copy(
-                        messages = messages,
+                        messages = mergedMessages,
                         currentSessionId = sessionId
                     )
                 }
@@ -92,9 +132,33 @@ class ChatViewModel(
     }
 
     /**
+     * 从 extra_data JSON 字符串解析 tool_calls 名称列表
+     */
+    private fun parseToolCalls(extraData: String?): List<String> {
+        if (extraData.isNullOrBlank()) return emptyList()
+        return try {
+            val jsonElement = json.parseToJsonElement(extraData)
+            val toolCalls = jsonElement.jsonObject["tool_calls"]?.jsonArray ?: return emptyList()
+            toolCalls.mapNotNull { tc ->
+                val obj = tc.jsonObject
+                val name = obj["name"]?.jsonPrimitive?.content ?: return@mapNotNull null
+                // 如果是 Skill 工具，从 args 中提取实际技能名
+                if (name == "Skill") {
+                    obj["args"]?.jsonObject?.get("skill")?.jsonPrimitive?.content ?: name
+                } else {
+                    name
+                }
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    /**
      * 发送消息
      */
-    fun sendMessage(content: String, attachments: List<Any>? = null) {
+    @Suppress("UNCHECKED_CAST")
+    fun sendMessage(content: String, attachments: List<Map<String, String>>? = null) {
         if (content.isBlank() || _uiState.value.isStreaming) return
 
         viewModelScope.launch {
@@ -130,7 +194,15 @@ class ChatViewModel(
                     val requestBody = buildJsonObject {
                         put("message", content)
                         _uiState.value.currentSessionId?.let { put("session_id", it) }
-                        // TODO: 添加 attachments
+                        if (!attachments.isNullOrEmpty()) {
+                            put("attachments", kotlinx.serialization.json.buildJsonArray {
+                                attachments.forEach { att ->
+                                    add(buildJsonObject {
+                                        att.forEach { (k, v) -> put(k, v) }
+                                    })
+                                }
+                            })
+                        }
                     }.toString()
 
                     val eventFlow = sseManager.connectPost(url, requestBody)
@@ -197,8 +269,6 @@ class ChatViewModel(
                                 }
                             }
                             is SSEEvent.ApprovalRequiredEvent -> {
-                                println("🔔 收到审批请求: toolName=${event.toolName}, requestId=${event.requestId}")
-
                                 // 更新消息状态
                                 updateAIMessage(aiMessageId) { msg ->
                                     msg.copy(
@@ -214,9 +284,6 @@ class ChatViewModel(
                                 // 暂停流式状态，等待用户审批
                                 _uiState.value = _uiState.value.copy(isStreaming = false)
 
-                                // 验证消息是否更新
-                                val updatedMsg = _uiState.value.messages.find { it.id == aiMessageId }
-                                println("✅ 消息已更新: id=$aiMessageId, hasApproval=${updatedMsg?.approvalRequest != null}")
                             }
                             is SSEEvent.DoneEvent -> {
                                 updateMessageId(aiMessageId, event.assistantMessageId)
@@ -256,30 +323,12 @@ class ChatViewModel(
     fun stopStreaming() {
         streamingJob?.cancel()
         streamingJob = null
-        _uiState.value = _uiState.value.copy(isStreaming = false)
-    }
-
-    /**
-     * 测试审批功能（仅用于调试）
-     */
-    fun testApproval() {
-        val testMessage = Message(
-            id = "test-${System.currentTimeMillis()}",
-            role = "assistant",
-            parts = listOf(MessagePart(type = "text", content = "测试审批消息")),
-            isStreaming = false,
-            approvalRequest = ApprovalRequest(
-                requestId = "test-request-123",
-                toolName = "python_repl",
-                toolInput = kotlinx.serialization.json.buildJsonObject {
-                    put("code", kotlinx.serialization.json.JsonPrimitive("print('Hello, World!')"))
-                }
-            )
-        )
         _uiState.value = _uiState.value.copy(
-            messages = _uiState.value.messages + testMessage
+            isStreaming = false,
+            messages = _uiState.value.messages.map { msg ->
+                if (msg.isStreaming) msg.copy(isStreaming = false) else msg
+            }
         )
-        println("🧪 添加测试审批消息: ${testMessage.approvalRequest}")
     }
 
     /**
@@ -288,16 +337,12 @@ class ChatViewModel(
     fun approveToolUse(requestId: String, approved: Boolean) {
         viewModelScope.launch {
             try {
-                println("🎯 发送审批: requestId=$requestId, approved=$approved")
-
                 val response = chatApi.approveToolUse(
                     com.guyi.demo1.data.api.ApprovalRequest(
                         request_id = requestId,
                         approved = approved
                     )
                 )
-
-                println("✅ 审批响应: ${response.status}")
 
                 // 清除当前消息的审批请求状态
                 _uiState.value = _uiState.value.copy(
@@ -315,7 +360,6 @@ class ChatViewModel(
                 // 如果审批通过，流会自动继续发送 token
                 // 如果拒绝，会收到 approval_rejected 事件
             } catch (e: Exception) {
-                println("❌ 审批失败: ${e.message}")
                 _uiState.value = _uiState.value.copy(
                     error = "审批失败: ${e.message}"
                 )
@@ -343,6 +387,83 @@ class ChatViewModel(
                 if (msg.id == aiMessageId) update(msg) else msg
             }
         )
+    }
+
+    /**
+     * 清除错误
+     */
+    fun clearError() {
+        _uiState.value = _uiState.value.copy(error = null)
+    }
+
+    /**
+     * 删除消息
+     */
+    fun deleteMessage(messageId: String) {
+        viewModelScope.launch {
+            val result = messageRepository.deleteMessage(messageId)
+            if (result.isSuccess) {
+                _uiState.value = _uiState.value.copy(
+                    messages = _uiState.value.messages.filter { it.messageId != messageId }
+                )
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    error = "删除失败: ${result.exceptionOrNull()?.message}"
+                )
+            }
+        }
+    }
+
+    /**
+     * 重新生成最后一条 AI 消息
+     */
+    fun regenerateLastMessage() {
+        val messages = _uiState.value.messages
+        val lastAssistant = messages.lastOrNull { it.role == "assistant" } ?: return
+        val lastUser = messages.lastOrNull { it.role == "user" } ?: return
+
+        val userContent = lastUser.parts
+            .filter { it.type == "text" }
+            .mapNotNull { it.content }
+            .joinToString("\n")
+
+        viewModelScope.launch {
+            // 删除最后一条 AI 消息
+            lastAssistant.messageId?.let { messageRepository.deleteMessage(it) }
+            _uiState.value = _uiState.value.copy(
+                messages = _uiState.value.messages.filter { it.id != lastAssistant.id }
+            )
+            // 重发
+            sendMessage(userContent)
+        }
+    }
+
+    /**
+     * 编辑用户消息并重发
+     */
+    fun editAndResend(message: Message, newContent: String) {
+        val sessionId = _uiState.value.currentSessionId ?: return
+        val messageId = message.messageId ?: return
+
+        viewModelScope.launch {
+            // 删除该消息及之后的所有消息
+            val result = messageRepository.deleteMessagesAfter(sessionId, messageId)
+            if (result.isSuccess) {
+                // 从 UI 中移除该消息及之后的消息
+                val idx = _uiState.value.messages.indexOfFirst { it.id == message.id }
+                if (idx >= 0) {
+                    _uiState.value = _uiState.value.copy(
+                        messages = _uiState.value.messages.subList(0, idx)
+                    )
+                }
+                // 重发编辑后的内容
+                sendMessage(newContent)
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    error = "编辑失败: ${result.exceptionOrNull()?.message}"
+                )
+            }
+        }
     }
 
     override fun onCleared() {

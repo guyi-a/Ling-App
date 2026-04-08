@@ -8,13 +8,18 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 data class Session(
+    val id: Int? = null,
     @SerialName("session_id")
     val sessionId: String,
     @SerialName("user_id")
-    val userId: String,
-    val title: String,
+    val userId: String? = null,
+    val title: String? = null,
     @SerialName("created_at")
     val createdAt: String,
     @SerialName("updated_at")
-    val updatedAt: String
+    val updatedAt: String,
+    @SerialName("is_active")
+    val isActive: Boolean = true,
+    @SerialName("message_count")
+    val messageCount: Int? = null
 )

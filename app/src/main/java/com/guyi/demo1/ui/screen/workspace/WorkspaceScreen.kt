@@ -1,6 +1,8 @@
 package com.guyi.demo1.ui.screen.workspace
 
-import androidx.compose.foundation.clickable
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,23 +15,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.guyi.demo1.LingAgentApplication
+import com.guyi.demo1.data.model.WorkspaceFile
 import com.guyi.demo1.ui.components.*
-
-/**
- * 工作区文件数据类
- */
-data class WorkspaceFile(
-    val id: String,
-    val name: String,
-    val path: String,
-    val folder: String, // "uploads" or "outputs"
-    val size: Long,
-    val modifiedAt: String,
-    val type: FileType
-)
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 enum class FileType {
     IMAGE, PDF, CSV, TEXT, OTHER
@@ -42,94 +38,44 @@ fun WorkspaceScreen(
     sessionTitle: String = "当前会话",
     onBackClick: () -> Unit = {}
 ) {
-    var showUploadDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val appContainer = (context.applicationContext as LingAgentApplication).container
+    val viewModel: WorkspaceViewModel = viewModel(
+        factory = WorkspaceViewModelFactory(
+            appContainer.workspaceRepository,
+            context,
+            sessionId
+        )
+    )
+
+    val uiState by viewModel.uiState.collectAsState()
     var selectedFile by remember { mutableStateOf<WorkspaceFile?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
-    // 模拟文件数据
-    val uploadedFiles = remember {
-        listOf(
-            WorkspaceFile(
-                id = "1",
-                name = "sales_data.csv",
-                path = "uploads/sales_data.csv",
-                folder = "uploads",
-                size = 15678,
-                modifiedAt = "今天 10:23",
-                type = FileType.CSV
-            ),
-            WorkspaceFile(
-                id = "2",
-                name = "chart_screenshot.png",
-                path = "uploads/chart_screenshot.png",
-                folder = "uploads",
-                size = 239872,
-                modifiedAt = "今天 10:25",
-                type = FileType.IMAGE
-            ),
-            WorkspaceFile(
-                id = "3",
-                name = "document.pdf",
-                path = "uploads/document.pdf",
-                folder = "uploads",
-                size = 1024567,
-                modifiedAt = "昨天 15:30",
-                type = FileType.PDF
-            )
-        )
+    // 文件选择器
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let { viewModel.uploadFile(it) }
     }
 
-    val generatedFiles = remember {
-        listOf(
-            WorkspaceFile(
-                id = "4",
-                name = "sales_trend.png",
-                path = "outputs/sales_trend.png",
-                folder = "outputs",
-                size = 467890,
-                modifiedAt = "今天 10:30",
-                type = FileType.IMAGE
-            ),
-            WorkspaceFile(
-                id = "5",
-                name = "analysis_report.pdf",
-                path = "outputs/analysis_report.pdf",
-                folder = "outputs",
-                size = 1234567,
-                modifiedAt = "今天 10:35",
-                type = FileType.PDF
-            ),
-            WorkspaceFile(
-                id = "6",
-                name = "cleaned_data.csv",
-                path = "outputs/cleaned_data.csv",
-                folder = "outputs",
-                size = 23456,
-                modifiedAt = "今天 11:00",
-                type = FileType.CSV
-            ),
-            WorkspaceFile(
-                id = "7",
-                name = "summary.txt",
-                path = "outputs/summary.txt",
-                folder = "outputs",
-                size = 2345,
-                modifiedAt = "今天 11:15",
-                type = FileType.TEXT
-            ),
-            WorkspaceFile(
-                id = "8",
-                name = "visualization.png",
-                path = "outputs/visualization.png",
-                folder = "outputs",
-                size = 567890,
-                modifiedAt = "今天 11:20",
-                type = FileType.IMAGE
-            )
-        )
+    // 显示提示
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(uiState.successMessage) {
+        uiState.successMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearSuccessMessage()
+        }
+    }
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearError()
+        }
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -151,8 +97,24 @@ fun WorkspaceScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showUploadDialog = true }) {
-                        Icon(Icons.Default.CloudUpload, "上传文件")
+                    IconButton(
+                        onClick = { viewModel.loadFiles() },
+                        enabled = !uiState.isLoading
+                    ) {
+                        Icon(Icons.Default.Refresh, "刷新")
+                    }
+                    IconButton(
+                        onClick = { filePickerLauncher.launch(arrayOf("*/*")) },
+                        enabled = !uiState.isUploading
+                    ) {
+                        if (uiState.isUploading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(Icons.Default.CloudUpload, "上传文件")
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -161,104 +123,109 @@ fun WorkspaceScreen(
             )
         }
     ) { paddingValues ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // 上传文件部分
-            item {
-                SectionHeader(
-                    icon = "📤",
-                    title = "上传文件",
-                    count = uploadedFiles.size
-                )
+        if (uiState.isLoading && uiState.uploads.isEmpty() && uiState.outputs.isEmpty()) {
+            // 初始加载
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
             }
-
-            if (uploadedFiles.isEmpty()) {
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // 上传文件部分
                 item {
-                    EmptyStateCompact(
-                        icon = "📁",
-                        message = "暂无上传文件"
+                    SectionHeader(
+                        icon = "📤",
+                        title = "上传文件",
+                        count = uiState.uploads.size
                     )
                 }
-            } else {
-                items(uploadedFiles, key = { it.id }) { file ->
-                    WorkspaceFileCard(
-                        file = file,
-                        onPreviewClick = {
-                            selectedFile = file
-                            // TODO: 显示预览
-                        },
-                        onDownloadClick = {
-                            // TODO: 下载文件
-                        },
-                        onDeleteClick = {
-                            selectedFile = file
-                            showDeleteDialog = true
-                        }
-                    )
+
+                if (uiState.uploads.isEmpty()) {
+                    item {
+                        EmptyStateCompact(
+                            icon = "📁",
+                            message = "暂无上传文件"
+                        )
+                    }
+                } else {
+                    items(uiState.uploads, key = { it.path }) { file ->
+                        WorkspaceFileCard(
+                            file = file,
+                            onDownloadClick = {
+                                viewModel.downloadFile(file)
+                            },
+                            onDeleteClick = {
+                                selectedFile = file
+                                showDeleteDialog = true
+                            }
+                        )
+                    }
                 }
-            }
 
-            item {
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            // 生成文件部分
-            item {
-                SectionHeader(
-                    icon = "📥",
-                    title = "生成文件",
-                    count = generatedFiles.size
-                )
-            }
-
-            if (generatedFiles.isEmpty()) {
                 item {
-                    EmptyStateCompact(
-                        icon = "📂",
-                        message = "暂无生成文件"
-                    )
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
-            } else {
-                items(generatedFiles, key = { it.id }) { file ->
-                    WorkspaceFileCard(
-                        file = file,
-                        onPreviewClick = {
-                            selectedFile = file
-                            // TODO: 显示预览
-                        },
-                        onDownloadClick = {
-                            // TODO: 下载文件
-                        },
-                        onDeleteClick = {
-                            selectedFile = file
-                            showDeleteDialog = true
-                        }
-                    )
-                }
-            }
 
-            // 底部上传按钮
-            item {
-                Spacer(modifier = Modifier.height(16.dp))
-                Button(
-                    onClick = { showUploadDialog = true },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Icon(Icons.Default.CloudUpload, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        "上传文件",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                // 生成文件部分
+                item {
+                    SectionHeader(
+                        icon = "📥",
+                        title = "生成文件",
+                        count = uiState.outputs.size
                     )
+                }
+
+                if (uiState.outputs.isEmpty()) {
+                    item {
+                        EmptyStateCompact(
+                            icon = "📂",
+                            message = "暂无生成文件"
+                        )
+                    }
+                } else {
+                    items(uiState.outputs, key = { it.path }) { file ->
+                        WorkspaceFileCard(
+                            file = file,
+                            onDownloadClick = {
+                                viewModel.downloadFile(file)
+                            },
+                            onDeleteClick = {
+                                selectedFile = file
+                                showDeleteDialog = true
+                            }
+                        )
+                    }
+                }
+
+                // 底部上传按钮
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        onClick = { filePickerLauncher.launch(arrayOf("*/*")) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        enabled = !uiState.isUploading
+                    ) {
+                        Icon(Icons.Default.CloudUpload, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            if (uiState.isUploading) "上传中..." else "上传文件",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }
@@ -269,7 +236,7 @@ fun WorkspaceScreen(
         DeleteConfirmDialog(
             itemName = selectedFile!!.name,
             onConfirm = {
-                // TODO: 实际删除逻辑
+                selectedFile?.let { viewModel.deleteFile(it) }
                 showDeleteDialog = false
                 selectedFile = null
             },
@@ -277,16 +244,6 @@ fun WorkspaceScreen(
                 showDeleteDialog = false
                 selectedFile = null
             }
-        )
-    }
-
-    // 上传文件对话框
-    if (showUploadDialog) {
-        InfoDialog(
-            title = "上传文件",
-            message = "文件上传功能将在后续版本中实现。\n\n支持的文件类型：\n• 图片（PNG, JPG）\n• 数据（CSV, Excel）\n• 文档（PDF, TXT）",
-            confirmText = "知道了",
-            onConfirm = { showUploadDialog = false }
         )
     }
 }
@@ -333,10 +290,11 @@ fun SectionHeader(
 @Composable
 fun WorkspaceFileCard(
     file: WorkspaceFile,
-    onPreviewClick: () -> Unit,
     onDownloadClick: () -> Unit,
     onDeleteClick: () -> Unit
 ) {
+    val fileType = getFileType(file.name)
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -356,10 +314,10 @@ fun WorkspaceFileCard(
             ) {
                 // 文件图标
                 Icon(
-                    getFileIcon(file.type),
+                    getFileIcon(fileType),
                     contentDescription = null,
                     modifier = Modifier.size(48.dp),
-                    tint = getFileIconColor(file.type)
+                    tint = getFileIconColor(fileType)
                 )
 
                 Spacer(modifier = Modifier.width(16.dp))
@@ -394,7 +352,7 @@ fun WorkspaceFileCard(
                         )
 
                         Text(
-                            text = file.modifiedAt,
+                            text = formatTimestamp(file.modifiedAt),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -409,23 +367,6 @@ fun WorkspaceFileCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // 预览按钮
-                if (file.type == FileType.IMAGE || file.type == FileType.PDF) {
-                    OutlinedButton(
-                        onClick = onPreviewClick,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.RemoveRedEye,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("预览")
-                    }
-                }
-
                 // 下载按钮
                 OutlinedButton(
                     onClick = onDownloadClick,
@@ -464,6 +405,20 @@ fun WorkspaceFileCard(
 }
 
 /**
+ * 根据文件名判断类型
+ */
+private fun getFileType(fileName: String): FileType {
+    val ext = fileName.substringAfterLast('.', "").lowercase()
+    return when (ext) {
+        "png", "jpg", "jpeg", "gif", "webp", "bmp" -> FileType.IMAGE
+        "pdf" -> FileType.PDF
+        "csv", "xlsx", "xls" -> FileType.CSV
+        "txt", "md", "json", "xml", "log" -> FileType.TEXT
+        else -> FileType.OTHER
+    }
+}
+
+/**
  * 根据文件类型获取图标
  */
 private fun getFileIcon(type: FileType) = when (type) {
@@ -496,4 +451,14 @@ private fun formatFileSize(bytes: Long): String {
         bytes < 1024 * 1024 * 1024 -> String.format("%.1f MB", bytes / (1024.0 * 1024.0))
         else -> String.format("%.1f GB", bytes / (1024.0 * 1024.0 * 1024.0))
     }
+}
+
+/**
+ * 格式化 Unix 时间戳
+ */
+private fun formatTimestamp(timestamp: Double): String {
+    if (timestamp == 0.0) return ""
+    val date = Date((timestamp * 1000).toLong())
+    val format = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+    return format.format(date)
 }

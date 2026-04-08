@@ -246,8 +246,6 @@ class SSEManager(private val tokenProvider: () -> String?) {
                     json.decodeFromString<SSEEvent.ToolEndEvent>(data)
                 }
                 "approval_required" -> {
-                    println("🔔 SSE 收到 approval_required")
-                    println("📄 原始数据: $data")
                     json.decodeFromString<SSEEvent.ApprovalRequiredEvent>(data)
                 }
                 "approval_rejected" -> {
@@ -265,8 +263,7 @@ class SSEManager(private val tokenProvider: () -> String?) {
                 else -> null
             }
         } catch (e: Exception) {
-            println("❌ SSE 解析失败: eventType=$eventType, data=$data, error=${e.message}")
-            e.printStackTrace()
+            android.util.Log.w("SSEManager", "SSE 解析失败: eventType=$eventType, error=${e.message}")
             SSEEvent.ErrorEvent("解析 $eventType 事件失败: ${e.message}")
         }
     }

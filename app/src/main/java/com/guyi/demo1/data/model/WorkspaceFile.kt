@@ -1,5 +1,6 @@
 package com.guyi.demo1.data.model
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
@@ -9,10 +10,20 @@ import kotlinx.serialization.Serializable
 data class WorkspaceFile(
     val name: String,
     val path: String,
+    val folder: String,  // "uploads" | "outputs"
     val size: Long,
-    val type: String,  // "image", "pdf", "csv", "file"
-    val createdAt: String,
-    val folder: String  // "uploads" | "outputs"
+    @SerialName("modified_at")
+    val modifiedAt: Double = 0.0  // Unix timestamp from backend
+)
+
+/**
+ * 文件列表响应（匹配后端 {session_id, files: [...]}）
+ */
+@Serializable
+data class FileListResponse(
+    @SerialName("session_id")
+    val sessionId: String,
+    val files: List<WorkspaceFile>
 )
 
 /**
@@ -22,14 +33,16 @@ data class WorkspaceFile(
 data class FileUploadResponse(
     val filename: String,
     val path: String,
-    val size: Long
+    val size: Long,
+    @SerialName("content_type")
+    val contentType: String? = null
 )
 
 /**
- * 文件列表响应
+ * 文件删除响应
  */
 @Serializable
-data class FileListResponse(
-    val uploads: List<WorkspaceFile>,
-    val outputs: List<WorkspaceFile>
+data class FileDeleteResponse(
+    val status: String,
+    val message: String
 )

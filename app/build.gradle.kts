@@ -13,7 +13,7 @@ android {
         minSdk = 24
         targetSdk = 36
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -67,11 +67,11 @@ dependencies {
     // Navigation
     implementation(libs.navigation.compose)
 
-    // Coil (Image Loading) - 暂时注释掉
-    // implementation(libs.coil.compose)
+    // Coil (Image Loading)
+    implementation(libs.coil.compose)
 
-    // Markdown - 暂时注释掉
-    // implementation(libs.compose.markdown)
+    // Markdown
+    implementation(libs.compose.markdown)
 
     // Testing
     testImplementation(libs.junit)
