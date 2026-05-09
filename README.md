@@ -75,26 +75,6 @@ cd Ling-App
 
 ---
 
-## 功能截图
-
-<div align="center">
-
-| 登录 Hero | 欢迎页 | 项目运行中 |
-|---|---|---|
-| ![Login](docs/ppt-screenshots/08-login-hero.png) | ![Welcome](docs/ppt-screenshots/06-welcome-categories.png) | ![Project](docs/ppt-screenshots/01-project-detail-running.png) |
-
-| 心理咨询对话 | 文档生成 | WebView 预览 |
-|---|---|---|
-| ![Chat](docs/ppt-screenshots/02-chat-psych-rag.png) | ![PDF](docs/ppt-screenshots/04-chat-document-pdf.png) | ![WebView](docs/ppt-screenshots/05-webview-app-preview.png) |
-
-| 侧边抽屉 | 工作区 | 注册 |
-|---|---|---|
-| ![Drawer](docs/ppt-screenshots/03-drawer-projects-sessions.png) | ![Workspace](docs/ppt-screenshots/07-workspace-tree.png) | ![Register](docs/ppt-screenshots/09-register.png) |
-
-</div>
-
----
-
 ## 项目结构
 
 ```
