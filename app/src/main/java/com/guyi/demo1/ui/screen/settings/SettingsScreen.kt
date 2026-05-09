@@ -3,31 +3,77 @@ package com.guyi.demo1.ui.screen.settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.automirrored.outlined.Logout
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Feedback
+import androidx.compose.material.icons.outlined.FormatSize
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.LightMode
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.NotificationsNone
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.PrivacyTip
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.guyi.demo1.LingAgentApplication
 import com.guyi.demo1.ui.components.InfoDialog
 import com.guyi.demo1.ui.components.LogoutConfirmDialog
+import com.guyi.demo1.ui.theme.LingTheme
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * 设置页 — Warm Calm 重做
+ *  · 自定义顶栏（圆形返回 + 标题）
+ *  · 章节卡片：描边而非阴影
+ *  · 行内项：圆形 accent 容器 + 图标
+ *  · 主题颜色 dialog：Warm Calm 5 色板
+ *  · 字体大小 dialog：带预览的自定义 radio
+ */
 @Composable
 fun SettingsScreen(
     onBackClick: () -> Unit = {},
@@ -37,7 +83,8 @@ fun SettingsScreen(
     val context = LocalContext.current
     val themeManager = (context.applicationContext as LingAgentApplication).container.themeManager
     val scope = rememberCoroutineScope()
-    val snackbarHostState = remember { SnackbarHostState() }
+    val cs = MaterialTheme.colorScheme
+    val space = LingTheme.spacing
 
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
@@ -47,156 +94,154 @@ fun SettingsScreen(
     var showTermsDialog by remember { mutableStateOf(false) }
     var showFeedbackDialog by remember { mutableStateOf(false) }
 
-    // 从 DataStore 读取所有设置
     val darkModePref by themeManager.isDarkMode.collectAsState(initial = null)
     val darkModeEnabled = darkModePref ?: false
-    val themeColor by themeManager.themeColor.collectAsState(initial = "BLUE")
+    val themeColor by themeManager.themeColor.collectAsState(initial = "ORANGE")
     val fontSize by themeManager.fontSize.collectAsState(initial = "MEDIUM")
     val notificationsEnabled by themeManager.notifications.collectAsState(initial = true)
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            TopAppBar(
-                title = { Text("设置", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // 外观设置
-            SettingsSection(title = "外观设置") {
-                SettingsSwitchItem(
-                    icon = if (darkModeEnabled) Icons.Default.DarkMode else Icons.Outlined.LightMode,
-                    title = "深色模式",
-                    description = "切换深色/浅色主题",
-                    checked = darkModeEnabled,
-                    onCheckedChange = { scope.launch { themeManager.setDarkMode(it) } }
-                )
-
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-
-                SettingsSelectionItem(
-                    icon = Icons.Default.Palette,
-                    title = "主题颜色",
-                    description = themeColorLabel(themeColor),
-                    onClick = { showThemeColorDialog = true }
-                )
-
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-
-                SettingsSelectionItem(
-                    icon = Icons.Default.FormatSize,
-                    title = "字体大小",
-                    description = fontSizeLabel(fontSize),
-                    onClick = { showFontSizeDialog = true }
+    Surface(color = cs.background, modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // 顶栏
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = space.md, vertical = space.xs),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconCircleButton(icon = Icons.AutoMirrored.Filled.ArrowBack, contentDesc = "返回", onClick = onBackClick)
+                Spacer(Modifier.width(space.sm))
+                Text(
+                    text = "设置",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Medium
+                    ),
+                    color = cs.onSurface
                 )
             }
 
-            // 聊天设置
-            SettingsSection(title = "聊天设置") {
-                SettingsSwitchItem(
-                    icon = Icons.Default.Notifications,
-                    title = "消息通知",
-                    description = "接收新消息通知",
-                    checked = notificationsEnabled,
-                    onCheckedChange = { scope.launch { themeManager.setNotifications(it) } }
-                )
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = space.pageHorizontal)
+            ) {
+                Spacer(Modifier.height(space.md))
+
+                // 外观
+                SettingsSection(title = "外观") {
+                    SettingsSwitchItem(
+                        icon = if (darkModeEnabled) Icons.Outlined.DarkMode else Icons.Outlined.LightMode,
+                        title = "深色模式",
+                        description = "切换深色 / 浅色主题",
+                        checked = darkModeEnabled,
+                        onCheckedChange = { scope.launch { themeManager.setDarkMode(it) } }
+                    )
+                    ItemDivider()
+                    SettingsSelectionItem(
+                        icon = Icons.Outlined.Palette,
+                        title = "主题颜色",
+                        description = themeColorLabel(themeColor),
+                        accent = themeColorSwatch(themeColor),
+                        onClick = { showThemeColorDialog = true }
+                    )
+                    ItemDivider()
+                    SettingsSelectionItem(
+                        icon = Icons.Outlined.FormatSize,
+                        title = "字体大小",
+                        description = fontSizeLabel(fontSize),
+                        accent = null,
+                        onClick = { showFontSizeDialog = true }
+                    )
+                }
+
+                Spacer(Modifier.height(space.lg))
+
+                SettingsSection(title = "聊天") {
+                    SettingsSwitchItem(
+                        icon = Icons.Outlined.NotificationsNone,
+                        title = "消息通知",
+                        description = "接收新消息通知",
+                        checked = notificationsEnabled,
+                        onCheckedChange = { scope.launch { themeManager.setNotifications(it) } }
+                    )
+                }
+
+                Spacer(Modifier.height(space.lg))
+
+                SettingsSection(title = "账号与安全") {
+                    SettingsItem(
+                        icon = Icons.Outlined.Lock,
+                        title = "修改密码",
+                        description = "更改登录密码",
+                        onClick = onChangePasswordClick
+                    )
+                    ItemDivider()
+                    SettingsItem(
+                        icon = Icons.AutoMirrored.Outlined.Logout,
+                        title = "退出登录",
+                        description = "登出当前账号",
+                        onClick = { showLogoutDialog = true },
+                        destructive = true
+                    )
+                }
+
+                Spacer(Modifier.height(space.lg))
+
+                SettingsSection(title = "关于") {
+                    SettingsItem(
+                        icon = Icons.Outlined.Info,
+                        title = "版本信息",
+                        description = "Ling Agent v2.1.0",
+                        onClick = { showAboutDialog = true }
+                    )
+                    ItemDivider()
+                    SettingsItem(
+                        icon = Icons.Outlined.PrivacyTip,
+                        title = "隐私政策",
+                        description = "了解我们如何保护你的隐私",
+                        onClick = { showPrivacyDialog = true }
+                    )
+                    ItemDivider()
+                    SettingsItem(
+                        icon = Icons.Outlined.Description,
+                        title = "用户协议",
+                        description = "查看服务条款",
+                        onClick = { showTermsDialog = true }
+                    )
+                    ItemDivider()
+                    SettingsItem(
+                        icon = Icons.Outlined.Feedback,
+                        title = "反馈与支持",
+                        description = "向我们提建议",
+                        onClick = { showFeedbackDialog = true }
+                    )
+                }
+
+                Spacer(Modifier.height(space.xl))
+                Spacer(Modifier.navigationBarsPadding())
             }
-
-            // 账号与安全
-            SettingsSection(title = "账号与安全") {
-                SettingsItem(
-                    icon = Icons.Default.Lock,
-                    title = "修改密码",
-                    description = "更改登录密码",
-                    onClick = onChangePasswordClick
-                )
-
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-
-                SettingsItem(
-                    icon = Icons.AutoMirrored.Filled.Logout,
-                    title = "退出登录",
-                    description = "登出当前账号",
-                    onClick = { showLogoutDialog = true },
-                    isDestructive = true
-                )
-            }
-
-            // 关于
-            SettingsSection(title = "关于") {
-                SettingsItem(
-                    icon = Icons.Default.Info,
-                    title = "版本信息",
-                    description = "Ling Agent v1.1.0",
-                    onClick = { showAboutDialog = true }
-                )
-
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-
-                SettingsItem(
-                    icon = Icons.Default.PrivacyTip,
-                    title = "隐私政策",
-                    description = "了解我们如何保护你的隐私",
-                    onClick = { showPrivacyDialog = true }
-                )
-
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-
-                SettingsItem(
-                    icon = Icons.Default.Description,
-                    title = "用户协议",
-                    description = "查看服务条款",
-                    onClick = { showTermsDialog = true }
-                )
-
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-
-                SettingsItem(
-                    icon = Icons.Default.Feedback,
-                    title = "反馈与支持",
-                    description = "向我们提出建议和问题",
-                    onClick = { showFeedbackDialog = true }
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 
-    // 退出登录确认
     if (showLogoutDialog) {
         LogoutConfirmDialog(
             onConfirm = { showLogoutDialog = false; onLogout() },
             onDismiss = { showLogoutDialog = false }
         )
     }
-
-    // 关于
     if (showAboutDialog) {
         InfoDialog(
             title = "关于 Ling Agent",
-            message = "Ling Agent v1.1.0\n\n你的智能 AI 对话助手\n\n开发者：guyi",
+            message = "Ling Agent v2.1.0\n\n" +
+                    "基于多 Agent 协作架构的 AI 生产力工具，覆盖：\n" +
+                    "对话 · 开发 · 数据 · 文档 · 身心健康\n\n" +
+                    "开发者：guyi\n" +
+                    "GitHub: github.com/guyi-a/Ling-Agent",
             onConfirm = { showAboutDialog = false }
         )
     }
-
-    // 主题颜色选择
     if (showThemeColorDialog) {
         ThemeColorDialog(
             currentColor = themeColor,
@@ -207,8 +252,6 @@ fun SettingsScreen(
             onDismiss = { showThemeColorDialog = false }
         )
     }
-
-    // 字体大小选择
     if (showFontSizeDialog) {
         FontSizeDialog(
             currentSize = fontSize,
@@ -219,8 +262,6 @@ fun SettingsScreen(
             onDismiss = { showFontSizeDialog = false }
         )
     }
-
-    // 隐私政策
     if (showPrivacyDialog) {
         InfoDialog(
             title = "隐私政策",
@@ -229,12 +270,10 @@ fun SettingsScreen(
                     "2. 数据使用：你的数据仅用于提供和改进服务，不会出售给第三方。\n\n" +
                     "3. 数据存储：对话数据存储在安全的服务器上，采用加密传输。\n\n" +
                     "4. 数据删除：你可以随时删除对话记录和账号。\n\n" +
-                    "5. 第三方服务：我们使用通义千问 AI 模型处理对话，相关数据受阿里云隐私政策保护。",
+                    "5. 第三方模型：Ling Agent 接入 DeepSeek、通义千问、智谱 GLM 等多家 LLM Provider，由你在配置中选择。对话内容会被发送到所选 Provider 处理，相应数据受其各自隐私政策约束。",
             onConfirm = { showPrivacyDialog = false }
         )
     }
-
-    // 用户协议
     if (showTermsDialog) {
         InfoDialog(
             title = "用户协议",
@@ -247,154 +286,449 @@ fun SettingsScreen(
             onConfirm = { showTermsDialog = false }
         )
     }
-
-    // 反馈与支持
     if (showFeedbackDialog) {
         InfoDialog(
             title = "反馈与支持",
             message = "感谢你使用 Ling Agent！\n\n" +
-                    "如果你在使用过程中遇到问题，或者有任何建议和想法，欢迎通过以下方式联系我们：\n\n" +
-                    "邮箱：2903988117@qq.com\n\n" +
-                    "我们会认真阅读每一条反馈，并尽快回复。你的意见是我们持续改进的动力！",
+                    "遇到问题或有建议，欢迎通过以下方式联系：\n\n" +
+                    "· 邮箱：2903988117@qq.com\n" +
+                    "· GitHub Issues：github.com/guyi-a/Ling-Agent/issues\n\n" +
+                    "我们会认真阅读每一条反馈，并尽快回复。",
             onConfirm = { showFeedbackDialog = false }
         )
     }
 }
 
-// ============ 主题颜色选择弹窗 ============
+// =====================================================
+//  通用元件
+// =====================================================
 
 @Composable
-fun ThemeColorDialog(
+private fun IconCircleButton(icon: ImageVector, contentDesc: String, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDesc,
+            tint = cs.onSurface,
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+@Composable
+private fun SettingsSection(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val cs = MaterialTheme.colorScheme
+    val shapes = LingTheme.shapes
+    Column {
+        // 章节标题（小、克制、letter-spacing）
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(12.dp)
+                    .height(1.dp)
+                    .background(cs.onSurfaceVariant.copy(alpha = 0.5f))
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    letterSpacing = 2.sp,
+                    lineHeight = 14.sp,
+                    fontWeight = FontWeight.Medium
+                ),
+                color = cs.onSurfaceVariant
+            )
+        }
+
+        Surface(
+            shape = shapes.md,
+            color = cs.surface,
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(width = 1.dp, color = cs.outlineVariant, shape = shapes.md)
+        ) {
+            Column { content() }
+        }
+    }
+}
+
+@Composable
+private fun ItemDivider() {
+    val cs = MaterialTheme.colorScheme
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 60.dp)
+            .height(0.5.dp)
+            .background(cs.outlineVariant.copy(alpha = 0.5f))
+    )
+}
+
+@Composable
+private fun SettingsItem(
+    icon: ImageVector,
+    title: String,
+    description: String,
+    onClick: () -> Unit,
+    destructive: Boolean = false
+) {
+    val cs = MaterialTheme.colorScheme
+    val accent = if (destructive) cs.error else cs.onSurfaceVariant
+    val titleColor = if (destructive) cs.error else cs.onSurface
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconHolder(icon = icon, accent = accent)
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                color = titleColor
+            )
+            Spacer(Modifier.height(1.dp))
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 16.sp),
+                color = cs.onSurfaceVariant.copy(alpha = 0.75f)
+            )
+        }
+        Icon(
+            imageVector = Icons.Outlined.ChevronRight,
+            contentDescription = null,
+            tint = cs.onSurfaceVariant.copy(alpha = 0.4f),
+            modifier = Modifier.size(16.dp)
+        )
+    }
+}
+
+@Composable
+private fun SettingsSelectionItem(
+    icon: ImageVector,
+    title: String,
+    description: String,
+    accent: Color?,
+    onClick: () -> Unit
+) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconHolder(icon = icon, accent = cs.onSurfaceVariant)
+        Spacer(Modifier.width(14.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+            color = cs.onSurface,
+            modifier = Modifier.weight(1f)
+        )
+
+        // 当前值（带可选色块）
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (accent != null) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(accent)
+                )
+                Spacer(Modifier.width(6.dp))
+            }
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = cs.onSurfaceVariant
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Icon(
+            imageVector = Icons.Outlined.ChevronRight,
+            contentDescription = null,
+            tint = cs.onSurfaceVariant.copy(alpha = 0.4f),
+            modifier = Modifier.size(16.dp)
+        )
+    }
+}
+
+@Composable
+private fun SettingsSwitchItem(
+    icon: ImageVector,
+    title: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconHolder(icon = icon, accent = cs.onSurfaceVariant)
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                color = cs.onSurface
+            )
+            Spacer(Modifier.height(1.dp))
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 16.sp),
+                color = cs.onSurfaceVariant.copy(alpha = 0.75f)
+            )
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = cs.onPrimary,
+                checkedTrackColor = cs.primary,
+                uncheckedThumbColor = cs.outline,
+                uncheckedTrackColor = cs.surfaceVariant,
+                uncheckedBorderColor = cs.outlineVariant
+            )
+        )
+    }
+}
+
+@Composable
+private fun IconHolder(icon: ImageVector, accent: Color) {
+    Box(
+        modifier = Modifier
+            .size(32.dp)
+            .clip(CircleShape)
+            .background(accent.copy(alpha = 0.10f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = accent,
+            modifier = Modifier.size(16.dp)
+        )
+    }
+}
+
+// =====================================================
+//  主题颜色 dialog
+// =====================================================
+
+@Composable
+private fun ThemeColorDialog(
     currentColor: String,
     onSelect: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val colors = listOf(
-        "BLUE" to Pair("蓝色", Color(0xFF1565C0)),
-        "PURPLE" to Pair("紫色", Color(0xFF6650a4)),
-        "GREEN" to Pair("绿色", Color(0xFF2E7D32)),
-        "ORANGE" to Pair("橙色", Color(0xFFE65100)),
-        "RED" to Pair("红色", Color(0xFFC62828))
+    val cs = MaterialTheme.colorScheme
+    val shapes = LingTheme.shapes
+    val swatches = listOf(
+        "ORANGE" to Pair("焦糖橙", Color(0xFFB5663A)),
+        "GREEN" to Pair("苔绿", Color(0xFF5A7A48)),
+        "BLUE" to Pair("雾蓝", Color(0xFF4A6E7E)),
+        "PURPLE" to Pair("陶土紫", Color(0xFF84576E)),
+        "RED" to Pair("砖窑红", Color(0xFF9C4E40))
     )
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = cs.surface,
+        shape = shapes.lg,
         title = {
-            Text("选择主题颜色", fontWeight = FontWeight.Bold)
+            Text(
+                "主题颜色",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Medium),
+                color = cs.onSurface
+            )
         },
         text = {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                colors.forEach { (key, pair) ->
+                swatches.forEach { (key, pair) ->
                     val (label, color) = pair
                     val isSelected = key == currentColor
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(shapes.sm)
                             .clickable { onSelect(key) }
-                            .padding(8.dp)
+                            .padding(vertical = 6.dp, horizontal = 4.dp)
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(40.dp)
+                                .size(44.dp)
                                 .clip(CircleShape)
                                 .background(color)
                                 .then(
-                                    if (isSelected) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
-                                    else Modifier
+                                    if (isSelected) {
+                                        Modifier.border(2.5.dp, cs.onSurface, CircleShape)
+                                    } else {
+                                        Modifier.border(
+                                            1.dp,
+                                            cs.outlineVariant.copy(alpha = 0.6f),
+                                            CircleShape
+                                        )
+                                    }
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
                             if (isSelected) {
                                 Icon(
-                                    Icons.Default.Check,
-                                    null,
+                                    imageVector = Icons.Outlined.Check,
+                                    contentDescription = null,
                                     tint = Color.White,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(Modifier.height(8.dp))
                         Text(
-                            label,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            text = label,
+                            style = MaterialTheme.typography.labelSmall.copy(lineHeight = 12.sp),
+                            color = if (isSelected) cs.onSurface else cs.onSurfaceVariant,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                         )
                     }
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
-        },
-        shape = RoundedCornerShape(20.dp)
+            TextButton(onClick = onDismiss) {
+                Text("完成", color = cs.primary, fontWeight = FontWeight.Medium)
+            }
+        }
     )
 }
 
-// ============ 字体大小选择弹窗 ============
+// =====================================================
+//  字体大小 dialog
+// =====================================================
 
 @Composable
-fun FontSizeDialog(
+private fun FontSizeDialog(
     currentSize: String,
     onSelect: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val cs = MaterialTheme.colorScheme
+    val shapes = LingTheme.shapes
     val sizes = listOf(
-        "SMALL" to "小",
-        "MEDIUM" to "中（默认）",
-        "LARGE" to "大",
-        "EXTRA_LARGE" to "超大"
+        Triple("SMALL", "小", 14),
+        Triple("MEDIUM", "中（默认）", 16),
+        Triple("LARGE", "大", 18),
+        Triple("EXTRA_LARGE", "超大", 21)
     )
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = cs.surface,
+        shape = shapes.lg,
         title = {
-            Text("选择字体大小", fontWeight = FontWeight.Bold)
+            Text(
+                "字体大小",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Medium),
+                color = cs.onSurface
+            )
         },
         text = {
             Column {
-                sizes.forEach { (key, label) ->
+                sizes.forEach { (key, label, previewSize) ->
                     val isSelected = key == currentSize
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(shapes.sm)
                             .clickable { onSelect(key) }
-                            .padding(12.dp),
+                            .padding(horizontal = 8.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        RadioButton(
-                            selected = isSelected,
-                            onClick = { onSelect(key) }
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        // 自定义 radio
+                        Box(
+                            modifier = Modifier
+                                .size(18.dp)
+                                .clip(CircleShape)
+                                .border(
+                                    width = 1.5.dp,
+                                    color = if (isSelected) cs.primary else cs.outline,
+                                    shape = CircleShape
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isSelected) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(cs.primary)
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(14.dp))
                         Text(
-                            label,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            text = label,
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontSize = previewSize.sp,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                            ),
+                            color = if (isSelected) cs.onSurface else cs.onSurfaceVariant
                         )
                     }
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
-        },
-        shape = RoundedCornerShape(20.dp)
+            TextButton(onClick = onDismiss) {
+                Text("完成", color = cs.primary, fontWeight = FontWeight.Medium)
+            }
+        }
     )
 }
 
-// ============ 工具函数 ============
+// =====================================================
+//  Helpers
+// =====================================================
 
 private fun themeColorLabel(key: String): String = when (key) {
-    "PURPLE" -> "紫色"
-    "GREEN" -> "绿色"
-    "ORANGE" -> "橙色"
-    "RED" -> "红色"
-    else -> "蓝色"
+    "PURPLE" -> "陶土紫"
+    "GREEN" -> "苔绿"
+    "BLUE" -> "雾蓝"
+    "RED" -> "砖窑红"
+    else -> "焦糖橙"
+}
+
+private fun themeColorSwatch(key: String): Color = when (key) {
+    "PURPLE" -> Color(0xFF84576E)
+    "GREEN" -> Color(0xFF5A7A48)
+    "BLUE" -> Color(0xFF4A6E7E)
+    "RED" -> Color(0xFF9C4E40)
+    else -> Color(0xFFB5663A)
 }
 
 private fun fontSizeLabel(key: String): String = when (key) {
@@ -402,127 +736,4 @@ private fun fontSizeLabel(key: String): String = when (key) {
     "LARGE" -> "大"
     "EXTRA_LARGE" -> "超大"
     else -> "中"
-}
-
-// ============ 通用组件 ============
-
-@Composable
-fun SettingsSection(
-    title: String,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Column {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
-        )
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-        ) {
-            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                content()
-            }
-        }
-    }
-}
-
-@Composable
-fun SettingsItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    description: String,
-    onClick: () -> Unit,
-    isDestructive: Boolean = false
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = icon, contentDescription = null,
-            modifier = Modifier.size(24.dp),
-            tint = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium,
-                color = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
-            )
-            Text(text = description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Icon(
-            Icons.Default.ChevronRight, null,
-            modifier = Modifier.size(20.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-        )
-    }
-}
-
-@Composable
-fun SettingsSelectionItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    description: String,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(icon, null, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(modifier = Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-            Surface(
-                shape = RoundedCornerShape(6.dp),
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                modifier = Modifier.padding(top = 4.dp)
-            ) {
-                Text(
-                    description, style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                )
-            }
-        }
-        Icon(Icons.Default.ChevronRight, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
-    }
-}
-
-@Composable
-fun SettingsSwitchItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    description: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(icon, null, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(modifier = Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-            Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
-    }
 }

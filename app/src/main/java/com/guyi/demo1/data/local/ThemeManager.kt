@@ -24,7 +24,7 @@ class ThemeManager(private val context: Context) {
     // 外观
     val isDarkMode: Flow<Boolean?> = context.themeDataStore.data.map { it[darkModeKey] }
 
-    val themeColor: Flow<String> = context.themeDataStore.data.map { it[themeColorKey] ?: "BLUE" }
+    val themeColor: Flow<String> = context.themeDataStore.data.map { it[themeColorKey] ?: "ORANGE" }
 
     val fontSize: Flow<String> = context.themeDataStore.data.map { it[fontSizeKey] ?: "MEDIUM" }
 

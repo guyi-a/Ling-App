@@ -1,26 +1,58 @@
 package com.guyi.demo1.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.outlined.Build
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Terminal
+import androidx.compose.material.icons.outlined.WarningAmber
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.guyi.demo1.ui.theme.LingTheme
 
-/**
- * 工具审批数据
- */
+/** 工具审批数据 */
 data class ToolApprovalRequest(
     val requestId: String,
     val toolName: String,
@@ -29,311 +61,354 @@ data class ToolApprovalRequest(
 )
 
 /**
- * 工具审批弹窗
- *
- * @param request 审批请求
- * @param onApprove 批准回调
- * @param onReject 拒绝回调
+ * 工具审批弹窗 — Warm Calm 重做
+ *   · 顶部圆形 primary 容器 + 工具类型图标
+ *   · 工具名（等宽字体）
+ *   · 参数列表（可滚动，可展开折叠）
+ *   · 自定义 checkbox：始终允许此工具
+ *   · 安全警告（error 竖条 + 文案）
+ *   · 拒绝（文字按钮）+ 允许（primary 实色按钮）
  */
 @Composable
 fun ToolApprovalDialog(
     request: ToolApprovalRequest,
-    onApprove: () -> Unit,
+    onApprove: (alwaysAllow: Boolean) -> Unit,
     onReject: () -> Unit
 ) {
-    var isExpanded by remember { mutableStateOf(false) }
+    val cs = MaterialTheme.colorScheme
+    val shapes = LingTheme.shapes
+    var alwaysAllow by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onReject,
+        containerColor = cs.surface,
+        shape = shapes.lg,
         icon = {
-            Icon(
-                getToolIcon(request.toolName),
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(cs.primary.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = getToolIcon(request.toolName),
+                    contentDescription = null,
+                    tint = cs.primary,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
         },
         title = {
-            Column {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = "工具调用请求",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    color = cs.onSurface
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "Agent 想要执行工具",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = if (request.description.isNotBlank()) request.description else "Agent 想要执行下列工具",
+                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 16.sp),
+                    color = cs.onSurfaceVariant
                 )
             }
         },
         text = {
-            Column(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                // 工具名称卡片
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = getToolEmoji(request.toolName),
-                            style = MaterialTheme.typography.headlineMedium,
-                            modifier = Modifier.padding(end = 12.dp)
+            Column(modifier = Modifier.fillMaxWidth()) {
+                // 工具名称行
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(shapes.sm)
+                        .background(cs.surfaceVariant.copy(alpha = 0.5f))
+                        .border(
+                            width = 1.dp,
+                            color = cs.outlineVariant.copy(alpha = 0.6f),
+                            shape = shapes.sm
                         )
-
-                        Column {
-                            Text(
-                                text = request.toolName,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-
-                            if (request.description.isNotEmpty()) {
-                                Text(
-                                    text = request.description,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "工具",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            letterSpacing = 1.sp,
+                            lineHeight = 12.sp
+                        ),
+                        color = cs.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = request.toolName,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        color = cs.primary
+                    )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // 参数展示
+                // 参数列表
                 if (request.toolInput.isNotEmpty()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "执行参数",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold
-                        )
-
-                        TextButton(
-                            onClick = { isExpanded = !isExpanded }
-                        ) {
-                            Text(if (isExpanded) "收起" else "展开")
-                        }
-                    }
-
-                    Card(
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = "执行参数",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            letterSpacing = 1.sp,
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = 12.sp
+                        ),
+                        color = cs.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Surface(
+                        shape = shapes.sm,
+                        color = cs.surface,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = if (isExpanded) 300.dp else 120.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                        )
+                            .heightIn(max = 220.dp)
+                            .border(
+                                width = 1.dp,
+                                color = cs.outlineVariant.copy(alpha = 0.6f),
+                                shape = shapes.sm
+                            )
                     ) {
                         Column(
                             modifier = Modifier
-                                .fillMaxWidth()
                                 .verticalScroll(rememberScrollState())
                                 .padding(12.dp)
                         ) {
-                            request.toolInput.forEach { (key, value) ->
-                                ParameterItem(key, value.toString())
-                                if (key != request.toolInput.keys.last()) {
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                }
+                            request.toolInput.entries.forEachIndexed { idx, (k, v) ->
+                                if (idx > 0) Spacer(Modifier.height(8.dp))
+                                ParameterItem(k, v.toString())
                             }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(Modifier.height(14.dp))
 
-                // 安全提示
-                Card(
+                // 始终允许 checkbox
+                AlwaysAllowCheck(
+                    checked = alwaysAllow,
+                    onCheckedChange = { alwaysAllow = it }
+                )
+
+                Spacer(Modifier.height(10.dp))
+
+                // 安全警告
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)
-                    )
+                    verticalAlignment = Alignment.Top
                 ) {
-                    Row(
+                    Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Text(
-                            text = "⚠️",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(end = 8.dp)
+                            .padding(top = 2.dp)
+                            .size(width = 3.dp, height = 28.dp)
+                            .background(cs.error.copy(alpha = 0.6f))
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Row(verticalAlignment = Alignment.Top) {
+                        Icon(
+                            imageVector = Icons.Outlined.WarningAmber,
+                            contentDescription = null,
+                            tint = cs.error.copy(alpha = 0.8f),
+                            modifier = Modifier.size(14.dp).padding(top = 2.dp)
                         )
-
+                        Spacer(Modifier.width(6.dp))
                         Text(
                             text = getToolWarning(request.toolName),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer
+                            style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                            color = cs.onSurfaceVariant
                         )
                     }
                 }
             }
         },
         confirmButton = {
-            Button(
-                onClick = onApprove,
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
+            Box(
+                modifier = Modifier
+                    .clip(shapes.pill)
+                    .background(cs.primary)
+                    .clickable { onApprove(alwaysAllow) }
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 Text(
-                    "允许执行",
-                    fontWeight = FontWeight.Bold
+                    text = "允许执行",
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    color = cs.onPrimary
                 )
             }
         },
         dismissButton = {
-            OutlinedButton(
-                onClick = onReject,
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("拒绝")
+            TextButton(onClick = onReject) {
+                Text(
+                    text = "拒绝",
+                    color = cs.onSurfaceVariant,
+                    fontWeight = FontWeight.Medium
+                )
             }
-        },
-        shape = RoundedCornerShape(24.dp)
+        }
     )
 }
 
-/**
- * 参数项展示
- */
 @Composable
-private fun ParameterItem(
-    key: String,
-    value: String
-) {
+private fun ParameterItem(key: String, value: String) {
+    val cs = MaterialTheme.colorScheme
     Column {
         Text(
             text = key,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.primary
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.SemiBold,
+                lineHeight = 12.sp
+            ),
+            color = cs.primary
         )
-
-        Spacer(modifier = Modifier.height(4.dp))
-
+        Spacer(Modifier.height(4.dp))
+        val display = if (value.length > 240) value.take(240) + "…" else value
         Text(
-            text = value,
-            style = MaterialTheme.typography.bodySmall,
-            fontFamily = FontFamily.Monospace,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = display,
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontFamily = FontFamily.Monospace,
+                lineHeight = 16.sp
+            ),
+            color = cs.onSurface.copy(alpha = 0.85f),
             modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                    MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
-                    RoundedCornerShape(6.dp)
-                )
-                .padding(8.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(cs.surfaceVariant.copy(alpha = 0.5f))
+                .padding(horizontal = 8.dp, vertical = 6.dp)
         )
     }
 }
 
-/**
- * 获取工具图标
- */
-private fun getToolIcon(toolName: String): ImageVector {
-    return when {
-        toolName.contains("python", ignoreCase = true) -> Icons.Default.Code
-        toolName.contains("command", ignoreCase = true) -> Icons.Default.Terminal
-        toolName.contains("file", ignoreCase = true) -> Icons.Default.Description
-        else -> Icons.Default.Code
+@Composable
+private fun AlwaysAllowCheck(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    val cs = MaterialTheme.colorScheme
+    val borderColor by animateColorAsState(
+        targetValue = if (checked) cs.primary else cs.outline,
+        animationSpec = tween(160),
+        label = "ckbBorder"
+    )
+    val fillColor by animateColorAsState(
+        targetValue = if (checked) cs.primary else Color.Transparent,
+        animationSpec = tween(160),
+        label = "ckbFill"
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable { onCheckedChange(!checked) }
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(16.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(fillColor)
+                .border(width = 1.5.dp, color = borderColor, shape = RoundedCornerShape(4.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (checked) {
+                Icon(
+                    imageVector = Icons.Outlined.Check,
+                    contentDescription = null,
+                    tint = cs.onPrimary,
+                    modifier = Modifier.size(10.dp)
+                )
+            }
+        }
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text = "始终允许此工具",
+            style = MaterialTheme.typography.bodySmall,
+            color = cs.onSurface
+        )
     }
 }
 
-/**
- * 获取工具 Emoji
- */
-private fun getToolEmoji(toolName: String): String {
-    return when {
-        toolName.contains("python", ignoreCase = true) -> "🐍"
-        toolName.contains("command", ignoreCase = true) -> "💻"
-        toolName.contains("file", ignoreCase = true) -> "📁"
-        toolName.contains("write", ignoreCase = true) -> "✏️"
-        toolName.contains("read", ignoreCase = true) -> "📖"
-        toolName.contains("search", ignoreCase = true) -> "🔍"
-        else -> "🔧"
-    }
+/** 工具图标（按工具名前缀映射） */
+private fun getToolIcon(toolName: String): ImageVector = when {
+    toolName.contains("python", ignoreCase = true) -> Icons.Outlined.Code
+    toolName.contains("command", ignoreCase = true) -> Icons.Outlined.Terminal
+    toolName.contains("write", ignoreCase = true) -> Icons.Outlined.Edit
+    toolName.contains("read", ignoreCase = true) -> Icons.Outlined.Description
+    toolName.contains("search", ignoreCase = true) -> Icons.Outlined.Search
+    toolName.contains("file", ignoreCase = true) -> Icons.Outlined.Description
+    else -> Icons.Outlined.Build
 }
 
-/**
- * 获取工具警告信息
- */
-private fun getToolWarning(toolName: String): String {
-    return when {
-        toolName.contains("python", ignoreCase = true) ->
-            "此操作将执行 Python 代码，请确认代码内容安全后再允许。"
-        toolName.contains("command", ignoreCase = true) ->
-            "此操作将执行系统命令，可能会修改文件或系统设置。"
-        toolName.contains("write", ignoreCase = true) ->
-            "此操作将写入文件，请确认操作内容正确。"
-        else ->
-            "请仔细检查参数内容后再允许执行。"
-    }
+private fun getToolWarning(toolName: String): String = when {
+    toolName.contains("python", ignoreCase = true) ->
+        "此操作将执行 Python 代码，请确认代码内容安全后再允许。"
+    toolName.contains("command", ignoreCase = true) ->
+        "此操作将执行系统命令，可能修改文件或系统设置。"
+    toolName.contains("write", ignoreCase = true) ->
+        "此操作将写入文件，请确认操作内容正确。"
+    toolName.contains("dev_run", ignoreCase = true) ->
+        "此操作将启动后台进程，会占用工作区端口。"
+    else -> "请仔细检查参数内容后再允许执行。"
 }
 
-/**
- * 工具执行中的状态卡片
- */
+/** 工具执行中状态卡（保留接口兼容） */
 @Composable
 fun ToolExecutingCard(
     toolName: String,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-        )
+    val cs = MaterialTheme.colorScheme
+    val shapes = LingTheme.shapes
+    Surface(
+        shape = shapes.sm,
+        color = cs.primary.copy(alpha = 0.08f),
+        modifier = modifier
+            .fillMaxWidth()
+            .border(
+                width = 1.dp,
+                color = cs.primary.copy(alpha = 0.25f),
+                shape = shapes.sm
+            )
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Start
         ) {
             CircularProgressIndicator(
-                modifier = Modifier.size(24.dp),
-                strokeWidth = 3.dp,
-                color = MaterialTheme.colorScheme.primary
+                modifier = Modifier.size(14.dp),
+                strokeWidth = 2.dp,
+                color = cs.primary
             )
-
-            Spacer(modifier = Modifier.width(12.dp))
-
+            Spacer(Modifier.width(10.dp))
             Column {
                 Text(
-                    text = "正在执行工具",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = "正在执行",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        letterSpacing = 1.sp,
+                        lineHeight = 12.sp
+                    ),
+                    color = cs.onSurfaceVariant.copy(alpha = 0.7f)
                 )
-
+                Spacer(Modifier.height(2.dp))
                 Text(
                     text = toolName,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    color = cs.primary
                 )
             }
         }

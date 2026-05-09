@@ -46,3 +46,20 @@ data class FileDeleteResponse(
     val status: String,
     val message: String
 )
+
+@Serializable
+data class TreeEntry(
+    val name: String,
+    val path: String,
+    val type: String,
+    val size: Long = 0,
+    val children: List<TreeEntry> = emptyList()
+)
+
+@Serializable
+data class TreeResponse(
+    @SerialName("session_id")
+    val sessionId: String,
+    val root: String,
+    val entries: List<TreeEntry>
+)

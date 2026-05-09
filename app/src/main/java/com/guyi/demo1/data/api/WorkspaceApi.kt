@@ -3,6 +3,7 @@ package com.guyi.demo1.data.api
 import com.guyi.demo1.data.model.FileDeleteResponse
 import com.guyi.demo1.data.model.FileListResponse
 import com.guyi.demo1.data.model.FileUploadResponse
+import com.guyi.demo1.data.model.TreeResponse
 import okhttp3.MultipartBody
 import okhttp3.ResponseBody
 import retrofit2.http.DELETE
@@ -57,5 +58,33 @@ interface WorkspaceApi {
         @Path("session_id") sessionId: String,
         @Path("folder") folder: String,
         @Path("filename") filename: String
+    ): FileDeleteResponse
+
+    /**
+     * 获取目录树
+     */
+    @GET("/api/workspace/{session_id}/tree")
+    suspend fun getTree(
+        @Path("session_id") sessionId: String,
+        @Query("path") path: String = "."
+    ): TreeResponse
+
+    /**
+     * 通过路径下载文件
+     */
+    @Streaming
+    @GET("/api/workspace/{session_id}/download")
+    suspend fun downloadByPath(
+        @Path("session_id") sessionId: String,
+        @Query("path") path: String
+    ): ResponseBody
+
+    /**
+     * 通过路径删除文件
+     */
+    @DELETE("/api/workspace/{session_id}/delete")
+    suspend fun deleteByPath(
+        @Path("session_id") sessionId: String,
+        @Query("path") path: String
     ): FileDeleteResponse
 }

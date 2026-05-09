@@ -3,7 +3,9 @@ package com.guyi.demo1.data
 import android.content.Context
 import com.guyi.demo1.data.api.AuthApi
 import com.guyi.demo1.data.api.ChatApi
+import com.guyi.demo1.data.api.DevApi
 import com.guyi.demo1.data.api.MessageApi
+import com.guyi.demo1.data.api.ProjectApi
 import com.guyi.demo1.data.api.SessionApi
 import com.guyi.demo1.data.api.UserApi
 import com.guyi.demo1.data.api.WorkspaceApi
@@ -12,45 +14,50 @@ import com.guyi.demo1.data.local.TokenManager
 import com.guyi.demo1.data.network.RetrofitClient
 import com.guyi.demo1.data.network.SSEManager
 import com.guyi.demo1.data.repository.AuthRepository
+import com.guyi.demo1.data.repository.DevRepository
+import com.guyi.demo1.data.repository.ProjectRepository
 import com.guyi.demo1.data.repository.SessionRepository
 import com.guyi.demo1.data.repository.MessageRepository
 import com.guyi.demo1.data.repository.WorkspaceRepository
 import kotlinx.coroutines.runBlocking
 
-/**
- * 应用依赖容器
- * 简单的手动依赖注入（DI）容器
- */
 class AppContainer(context: Context) {
 
-    // Token 管理器
     val tokenManager = TokenManager(context)
-
-    // 主题管理器
     val themeManager = ThemeManager(context)
 
-    // OkHttp 客户端
-    private val okHttpClient = RetrofitClient.createOkHttpClient {
-        runBlocking { tokenManager.getToken() }
-    }
+    @Volatile
+    var onSessionExpired: (() -> Unit)? = null
 
-    // Retrofit 实例
+    private val okHttpClient = RetrofitClient.createOkHttpClient(
+        tokenProvider = { runBlocking { tokenManager.getToken() } },
+        refreshTokenProvider = { runBlocking { tokenManager.getRefreshToken() } },
+        onTokenRefreshed = { access, refresh ->
+            runBlocking {
+                tokenManager.saveToken(access)
+                tokenManager.saveRefreshToken(refresh)
+            }
+        },
+        onRefreshFailed = { onSessionExpired?.invoke() }
+    )
+
     private val retrofit = RetrofitClient.createRetrofit(okHttpClient)
 
-    // API 服务
     val authApi: AuthApi = RetrofitClient.createService(retrofit)
     val sessionApi: SessionApi = RetrofitClient.createService(retrofit)
+    val projectApi: ProjectApi = RetrofitClient.createService(retrofit)
     val chatApi: ChatApi = RetrofitClient.createService(retrofit)
     val messageApi: MessageApi = RetrofitClient.createService(retrofit)
     val userApi: UserApi = RetrofitClient.createService(retrofit)
     val workspaceApi: WorkspaceApi = RetrofitClient.createService(retrofit)
+    val devApi: DevApi = RetrofitClient.createService(retrofit)
 
-    // SSE 管理器
     val sseManager = SSEManager { runBlocking { tokenManager.getToken() } }
 
-    // Repository
     val authRepository = AuthRepository(context, authApi, tokenManager)
     val sessionRepository = SessionRepository(sessionApi)
+    val projectRepository = ProjectRepository(projectApi)
     val messageRepository = MessageRepository(messageApi)
     val workspaceRepository = WorkspaceRepository(workspaceApi, context)
+    val devRepository = DevRepository(devApi)
 }

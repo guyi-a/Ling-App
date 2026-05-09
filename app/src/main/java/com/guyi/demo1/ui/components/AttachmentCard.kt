@@ -1,37 +1,51 @@
 package com.guyi.demo1.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.PictureAsPdf
-import androidx.compose.material3.*
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.PictureAsPdf
+import androidx.compose.material.icons.outlined.TableChart
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.guyi.demo1.ui.theme.LingTheme
 
-/**
- * 附件类型枚举
- */
+/** 附件类型 */
 enum class AttachmentType {
-    IMAGE,
-    PDF,
-    CSV,
-    FILE
+    IMAGE, PDF, CSV, FILE
 }
 
-/**
- * 附件数据类
- */
+/** 附件数据 */
 data class Attachment(
     val id: String,
     val type: AttachmentType,
@@ -42,11 +56,8 @@ data class Attachment(
 )
 
 /**
- * 附件预览卡片 - 用于输入框上方的附件预览
- *
- * @param attachment 附件信息
- * @param onRemove 移除回调
- * @param modifier 修饰符
+ * 紧凑型附件 chip — 输入区上方横向展示
+ *  · 圆角胶囊 + 类型 accent 图标 + 文件名 + 删除按钮
  */
 @Composable
 fun AttachmentCard(
@@ -54,102 +65,76 @@ fun AttachmentCard(
     onRemove: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    val cs = MaterialTheme.colorScheme
+    val shapes = LingTheme.shapes
+    val accent = attachmentAccent(attachment.type, cs)
+
+    Surface(
+        shape = shapes.sm,
+        color = cs.surface,
         modifier = modifier
-            .width(120.dp)
-            .height(140.dp),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            .height(40.dp)
+            .border(width = 1.dp, color = cs.outlineVariant, shape = shapes.sm)
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize()
+        Row(
+            modifier = Modifier.padding(start = 8.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(accent.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
             ) {
-                // 文件图标或缩略图
-                if (attachment.thumbnailUrl != null) {
-                    // TODO: 使用 Coil 加载缩略图
-                    Box(
-                        modifier = Modifier
-                            .size(60.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            getFileIcon(attachment.type),
-                            contentDescription = null,
-                            modifier = Modifier.size(32.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                } else {
-                    Icon(
-                        getFileIcon(attachment.type),
-                        contentDescription = null,
-                        modifier = Modifier.size(60.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // 文件名
+                Icon(
+                    imageVector = getFileIcon(attachment.type),
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(13.dp)
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Column {
                 Text(
                     text = attachment.name,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontWeight = FontWeight.Medium,
+                        lineHeight = 14.sp
+                    ),
+                    color = cs.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 140.dp)
                 )
-
-                // 文件大小
                 if (attachment.size > 0) {
                     Text(
                         text = formatFileSize(attachment.size),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        style = MaterialTheme.typography.labelSmall.copy(lineHeight = 11.sp),
+                        color = cs.onSurfaceVariant.copy(alpha = 0.6f)
                     )
                 }
             }
-
-            // 删除按钮
-            IconButton(
-                onClick = onRemove,
+            Spacer(Modifier.width(6.dp))
+            Box(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .size(28.dp)
+                    .size(22.dp)
+                    .clip(CircleShape)
+                    .clickable(onClick = onRemove),
+                contentAlignment = Alignment.Center
             ) {
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(24.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Close,
-                        contentDescription = "删除",
-                        tint = MaterialTheme.colorScheme.onError,
-                        modifier = Modifier
-                            .padding(4.dp)
-                            .size(16.dp)
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Outlined.Close,
+                    contentDescription = "移除",
+                    tint = cs.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.size(12.dp)
+                )
             }
         }
     }
 }
 
-/**
- * 附件列表 - 横向滚动
- */
+/** 附件横向滚动列表（输入框上方） */
 @Composable
 fun AttachmentList(
     attachments: List<Attachment>,
@@ -157,24 +142,26 @@ fun AttachmentList(
     modifier: Modifier = Modifier
 ) {
     if (attachments.isEmpty()) return
-
+    val scroll = rememberScrollState()
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+            .horizontalScroll(scroll)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        attachments.forEach { attachment ->
+        attachments.forEach { att ->
             AttachmentCard(
-                attachment = attachment,
-                onRemove = { onRemove(attachment) }
+                attachment = att,
+                onRemove = { onRemove(att) }
             )
         }
     }
 }
 
 /**
- * 消息中的附件预览 - 紧凑版
+ * 消息内附件预览 — 列表项风格（点击查看）
  */
 @Composable
 fun MessageAttachmentPreview(
@@ -182,80 +169,86 @@ fun MessageAttachmentPreview(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    val cs = MaterialTheme.colorScheme
+    val shapes = LingTheme.shapes
+    val accent = attachmentAccent(attachment.type, cs)
+
+    Surface(
+        shape = shapes.sm,
+        color = cs.surface,
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
+            .border(width = 1.dp, color = cs.outlineVariant, shape = shapes.sm)
+            .clickable(onClick = onClick)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                getFileIcon(attachment.type),
-                contentDescription = null,
-                modifier = Modifier.size(40.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(
-                modifier = Modifier.weight(1f)
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(accent.copy(alpha = 0.10f)),
+                contentAlignment = Alignment.Center
             ) {
+                Icon(
+                    imageVector = getFileIcon(attachment.type),
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = attachment.name,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                    color = cs.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-
                 if (attachment.size > 0) {
                     Text(
                         text = formatFileSize(attachment.size),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        style = MaterialTheme.typography.labelSmall.copy(lineHeight = 12.sp),
+                        color = cs.onSurfaceVariant.copy(alpha = 0.65f)
                     )
                 }
             }
-
             Text(
                 text = "查看",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.SemiBold
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = cs.primary
             )
         }
     }
 }
 
-/**
- * 根据文件类型获取对应图标
- */
-private fun getFileIcon(type: AttachmentType): ImageVector {
-    return when (type) {
-        AttachmentType.IMAGE -> Icons.Default.Image
-        AttachmentType.PDF -> Icons.Default.PictureAsPdf
-        AttachmentType.CSV -> Icons.Default.Description
-        AttachmentType.FILE -> Icons.Default.Description
-    }
+// =====================================================
+//  helpers
+// =====================================================
+
+private fun getFileIcon(type: AttachmentType): ImageVector = when (type) {
+    AttachmentType.IMAGE -> Icons.Outlined.Image
+    AttachmentType.PDF -> Icons.Outlined.PictureAsPdf
+    AttachmentType.CSV -> Icons.Outlined.TableChart
+    AttachmentType.FILE -> Icons.Outlined.Description
 }
 
-/**
- * 格式化文件大小
- */
-private fun formatFileSize(bytes: Long): String {
-    return when {
-        bytes < 1024 -> "$bytes B"
-        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-        bytes < 1024 * 1024 * 1024 -> "${bytes / (1024 * 1024)} MB"
-        else -> "${bytes / (1024 * 1024 * 1024)} GB"
-    }
+private fun attachmentAccent(
+    type: AttachmentType,
+    cs: androidx.compose.material3.ColorScheme
+): Color = when (type) {
+    AttachmentType.IMAGE -> cs.primary
+    AttachmentType.PDF -> cs.tertiary
+    AttachmentType.CSV -> Color(0xFF5F8F5F)
+    AttachmentType.FILE -> cs.onSurfaceVariant
+}
+
+private fun formatFileSize(bytes: Long): String = when {
+    bytes < 1024 -> "$bytes B"
+    bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+    bytes < 1024L * 1024 * 1024 -> "${bytes / (1024 * 1024)} MB"
+    else -> "${bytes / (1024L * 1024 * 1024)} GB"
 }

@@ -6,6 +6,7 @@ import com.guyi.demo1.data.api.WorkspaceApi
 import com.guyi.demo1.data.model.FileDeleteResponse
 import com.guyi.demo1.data.model.FileListResponse
 import com.guyi.demo1.data.model.FileUploadResponse
+import com.guyi.demo1.data.model.TreeResponse
 import com.guyi.demo1.data.model.WorkspaceFile
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
@@ -70,6 +71,33 @@ class WorkspaceRepository(
     suspend fun deleteFile(sessionId: String, folder: String, filename: String): Result<FileDeleteResponse> {
         return try {
             val response = workspaceApi.deleteFile(sessionId, folder, filename)
+            Result.success(response)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getTree(sessionId: String, path: String = "."): Result<TreeResponse> {
+        return try {
+            val response = workspaceApi.getTree(sessionId, path)
+            Result.success(response)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun downloadByPath(sessionId: String, path: String): Result<ResponseBody> {
+        return try {
+            val response = workspaceApi.downloadByPath(sessionId, path)
+            Result.success(response)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteByPath(sessionId: String, path: String): Result<FileDeleteResponse> {
+        return try {
+            val response = workspaceApi.deleteByPath(sessionId, path)
             Result.success(response)
         } catch (e: Exception) {
             Result.failure(e)

@@ -24,7 +24,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val darkModePref by appContainer.themeManager.isDarkMode.collectAsState(initial = null)
             val darkTheme = darkModePref ?: isSystemInDarkTheme()
-            val themeColor by appContainer.themeManager.themeColor.collectAsState(initial = "BLUE")
+            val themeColor by appContainer.themeManager.themeColor.collectAsState(initial = "ORANGE")
             val fontSize by appContainer.themeManager.fontSize.collectAsState(initial = "MEDIUM")
 
             Demo1Theme(

@@ -9,7 +9,7 @@ import android.provider.MediaStore
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.guyi.demo1.data.model.WorkspaceFile
+import com.guyi.demo1.data.model.TreeEntry
 import com.guyi.demo1.data.repository.WorkspaceRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,8 +19,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 data class WorkspaceUiState(
-    val uploads: List<WorkspaceFile> = emptyList(),
-    val outputs: List<WorkspaceFile> = emptyList(),
+    val entries: List<TreeEntry> = emptyList(),
+    val currentPath: String = ".",
+    val pathStack: List<String> = listOf("."),
     val isLoading: Boolean = false,
     val isUploading: Boolean = false,
     val isDownloading: Boolean = false,
@@ -38,28 +39,49 @@ class WorkspaceViewModel(
     val uiState: StateFlow<WorkspaceUiState> = _uiState.asStateFlow()
 
     init {
-        loadFiles()
+        loadTree()
     }
 
-    fun loadFiles() {
+    fun loadTree(path: String = _uiState.value.currentPath) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-            val result = workspaceRepository.getFiles(sessionId)
+            val result = workspaceRepository.getTree(sessionId, path)
             result.onSuccess { response ->
-                val uploads = response.files.filter { it.folder == "uploads" }
-                val outputs = response.files.filter { it.folder == "outputs" }
                 _uiState.value = _uiState.value.copy(
-                    uploads = uploads,
-                    outputs = outputs,
+                    entries = response.entries,
+                    currentPath = path,
                     isLoading = false
                 )
             }.onFailure { e ->
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    error = "加载文件失败: ${e.message}"
+                    error = "加载失败: ${e.message}"
                 )
             }
         }
+    }
+
+    fun navigateInto(dirEntry: TreeEntry) {
+        val newPath = dirEntry.path
+        val newStack = _uiState.value.pathStack + newPath
+        _uiState.value = _uiState.value.copy(pathStack = newStack)
+        loadTree(newPath)
+    }
+
+    fun navigateUp() {
+        val stack = _uiState.value.pathStack
+        if (stack.size <= 1) return
+        val newStack = stack.dropLast(1)
+        _uiState.value = _uiState.value.copy(pathStack = newStack)
+        loadTree(newStack.last())
+    }
+
+    fun navigateTo(index: Int) {
+        val stack = _uiState.value.pathStack
+        if (index < 0 || index >= stack.size) return
+        val newStack = stack.take(index + 1)
+        _uiState.value = _uiState.value.copy(pathStack = newStack)
+        loadTree(newStack.last())
     }
 
     fun uploadFile(uri: Uri) {
@@ -71,7 +93,7 @@ class WorkspaceViewModel(
                     isUploading = false,
                     successMessage = "上传成功: ${response.filename}"
                 )
-                loadFiles()
+                loadTree()
             }.onFailure { e ->
                 _uiState.value = _uiState.value.copy(
                     isUploading = false,
@@ -81,17 +103,17 @@ class WorkspaceViewModel(
         }
     }
 
-    fun downloadFile(file: WorkspaceFile) {
+    fun downloadFile(entry: TreeEntry) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isDownloading = true, error = null)
-            val result = workspaceRepository.downloadFile(sessionId, file.folder, file.name)
+            val result = workspaceRepository.downloadByPath(sessionId, entry.path)
             result.onSuccess { responseBody ->
                 withContext(Dispatchers.IO) {
                     try {
-                        saveToDownloads(file.name, responseBody.bytes())
+                        saveToDownloads(entry.name, responseBody.bytes())
                         _uiState.value = _uiState.value.copy(
                             isDownloading = false,
-                            successMessage = "已保存到下载目录: ${file.name}"
+                            successMessage = "已保存到下载目录: ${entry.name}"
                         )
                     } catch (e: Exception) {
                         _uiState.value = _uiState.value.copy(
@@ -109,14 +131,14 @@ class WorkspaceViewModel(
         }
     }
 
-    fun deleteFile(file: WorkspaceFile) {
+    fun deleteFile(entry: TreeEntry) {
         viewModelScope.launch {
-            val result = workspaceRepository.deleteFile(sessionId, file.folder, file.name)
+            val result = workspaceRepository.deleteByPath(sessionId, entry.path)
             result.onSuccess {
                 _uiState.value = _uiState.value.copy(
-                    successMessage = "已删除: ${file.name}"
+                    successMessage = "已删除: ${entry.name}"
                 )
-                loadFiles()
+                loadTree()
             }.onFailure { e ->
                 _uiState.value = _uiState.value.copy(
                     error = "删除失败: ${e.message}"

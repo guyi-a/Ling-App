@@ -20,6 +20,8 @@ data class Session(
     val updatedAt: String,
     @SerialName("is_active")
     val isActive: Boolean = true,
+    @SerialName("is_pinned")
+    val isPinned: Boolean = false,
     @SerialName("message_count")
     val messageCount: Int? = null
 )

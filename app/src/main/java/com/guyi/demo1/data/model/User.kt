@@ -1,5 +1,6 @@
 package com.guyi.demo1.data.model
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
@@ -7,7 +8,11 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 data class User(
+    @SerialName("user_id")
     val userId: String,
     val username: String,
-    val createdAt: String? = null
+    @SerialName("created_at")
+    val createdAt: String? = null,
+    @SerialName("is_active")
+    val isActive: Boolean = true
 )

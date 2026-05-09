@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Ling Logo — 形状沿用 Web 端 favicon.svg
+  fillColor 固定为黑，使用方通过 ColorFilter.tint(...) 在 Compose 中染主题色
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="32dp"
+    android:height="32dp"
+    android:viewportWidth="32"
+    android:viewportHeight="32">
+
+    <path
+        android:fillColor="#000000"
+        android:pathData="M13,4a3,3 0,0 0,-3 3v15a3,3 0,0 0,3 3h12a3,3 0,1 0,0 -6H16V7a3,3 0,0 0,-3 -3z" />
+
+    <path
+        android:fillColor="#000000"
+        android:pathData="M24,5.5a2.5,2.5 0,1 0,0 5a2.5,2.5 0,0 0,0 -5z" />
+</vector>

@@ -20,11 +20,20 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 class TokenManager(private val context: Context) {
 
     private val tokenKey = stringPreferencesKey("access_token")
+    private val refreshTokenKey = stringPreferencesKey("refresh_token")
     private val userIdKey = stringPreferencesKey("user_id")
     private val usernameKey = stringPreferencesKey("username")
 
     suspend fun saveToken(token: String) {
         context.dataStore.edit { it[tokenKey] = token }
+    }
+
+    suspend fun saveRefreshToken(token: String) {
+        context.dataStore.edit { it[refreshTokenKey] = token }
+    }
+
+    suspend fun getRefreshToken(): String? {
+        return context.dataStore.data.first()[refreshTokenKey]
     }
 
     suspend fun saveUserInfo(userId: String, username: String) {

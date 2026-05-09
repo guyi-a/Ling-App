@@ -20,17 +20,17 @@ object RetrofitClient {
         isLenient = true  // 宽松模式
     }
 
-    /**
-     * 创建 OkHttpClient
-     */
-    fun createOkHttpClient(tokenProvider: () -> String?): OkHttpClient {
+    fun createOkHttpClient(
+        tokenProvider: () -> String?,
+        refreshTokenProvider: () -> String?,
+        onTokenRefreshed: (accessToken: String, refreshToken: String) -> Unit,
+        onRefreshFailed: () -> Unit
+    ): OkHttpClient {
         return OkHttpClient.Builder()
-            // 超时配置
             .connectTimeout(ApiConfig.TIMEOUT_CONNECT, TimeUnit.SECONDS)
             .readTimeout(ApiConfig.TIMEOUT_READ, TimeUnit.SECONDS)
             .writeTimeout(ApiConfig.TIMEOUT_WRITE, TimeUnit.SECONDS)
-            // 添加拦截器
-            .addInterceptor(AuthInterceptor(tokenProvider))
+            .addInterceptor(AuthInterceptor(tokenProvider, refreshTokenProvider, onTokenRefreshed, onRefreshFailed))
             .addInterceptor(createLoggingInterceptor())
             .build()
     }

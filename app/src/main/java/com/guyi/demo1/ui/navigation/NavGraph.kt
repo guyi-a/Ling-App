@@ -3,8 +3,10 @@ package com.guyi.demo1.ui.navigation
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import com.guyi.demo1.ui.components.DrawerContent
 import com.guyi.demo1.ui.screen.auth.LoginScreen
 import com.guyi.demo1.ui.screen.auth.RegisterScreen
@@ -15,6 +17,9 @@ import com.guyi.demo1.ui.screen.profile.ChangePasswordScreen
 import com.guyi.demo1.ui.screen.profile.ProfileScreen
 import com.guyi.demo1.ui.screen.settings.SettingsScreen
 import com.guyi.demo1.ui.screen.workspace.WorkspaceScreen
+import com.guyi.demo1.ui.screen.project.ProjectDetailScreen
+import com.guyi.demo1.ui.screen.webview.WebViewScreen
+import androidx.compose.runtime.key
 import kotlinx.coroutines.launch
 
 // 路由定义
@@ -49,30 +54,37 @@ fun NavGraph(
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            DrawerContent(
-                onSessionClick = { sessionId ->
-                    scope.launch {
-                        drawerState.close()
+            // key(isLoggedIn) 确保用户切换账号后 DrawerContent 被重建，刷新会话列表
+            key(isLoggedIn) {
+                DrawerContent(
+                    onSessionClick = { sessionId ->
+                        scope.launch {
+                            drawerState.close()
+                        }
+                        navController.navigate("chat/$sessionId")
+                    },
+                    onNewChatClick = {
+                        scope.launch {
+                            drawerState.close()
+                        }
+                        navController.navigate(Screen.Welcome.route) {
+                            popUpTo(Screen.Welcome.route) { inclusive = true }
+                        }
+                    },
+                    onSettingsClick = {
+                        scope.launch {
+                            drawerState.close()
+                        }
+                        navController.navigate(Screen.Settings.route)
+                    },
+                    onProjectClick = { projectId ->
+                        scope.launch {
+                            drawerState.close()
+                        }
+                        navController.navigate("project/$projectId")
                     }
-                    // 跳转到对应的历史会话
-                    navController.navigate("chat/$sessionId")
-                },
-                onNewChatClick = {
-                    scope.launch {
-                        drawerState.close()
-                    }
-                    // 返回欢迎页或新建对话
-                    navController.navigate(Screen.Welcome.route) {
-                        popUpTo(Screen.Welcome.route) { inclusive = true }
-                    }
-                },
-                onSettingsClick = {
-                    scope.launch {
-                        drawerState.close()
-                    }
-                    navController.navigate(Screen.Settings.route)
-                }
-            )
+                )
+            }
         },
         gesturesEnabled = isLoggedIn // 只有登录后才能打开抽屉
     ) {
@@ -243,6 +255,62 @@ fun NavGraph(
             // 账号安全
             composable(Screen.AccountSecurity.route) {
                 AccountSecurityScreen(
+                    onBackClick = { navController.popBackStack() }
+                )
+            }
+
+            // 项目详情
+            composable("project/{projectId}") { backStackEntry ->
+                val projectId = backStackEntry.arguments?.getString("projectId")?.toIntOrNull() ?: return@composable
+                ProjectDetailScreen(
+                    projectId = projectId,
+                    onBackClick = {
+                        navController.popBackStack()
+                        // 返回时重新打开侧边抽屉，让用户回到"项目列表"的上下文
+                        scope.launch { drawerState.open() }
+                    },
+                    onSessionClick = { sessionId ->
+                        navController.navigate("chat/$sessionId")
+                    },
+                    onOpenApp = { url, title ->
+                        val encodedUrl = java.net.URLEncoder.encode(url, "UTF-8")
+                        val encodedTitle = java.net.URLEncoder.encode(title, "UTF-8")
+                        navController.navigate("webview?url=$encodedUrl&title=$encodedTitle")
+                    },
+                    onProjectDeleted = {
+                        navController.popBackStack()
+                        // 删除后也打开抽屉，让用户看到项目列表已刷新
+                        scope.launch { drawerState.open() }
+                    }
+                )
+            }
+
+            // WebView 应用预览（端口模式）
+            composable("webview/{port}") { backStackEntry ->
+                val port = backStackEntry.arguments?.getString("port")?.toIntOrNull() ?: return@composable
+                WebViewScreen(
+                    port = port,
+                    onBackClick = { navController.popBackStack() }
+                )
+            }
+
+            // WebView 应用预览（URL模式）
+            composable(
+                "webview?url={url}&title={title}",
+                arguments = listOf(
+                    navArgument("url") { type = NavType.StringType },
+                    navArgument("title") { type = NavType.StringType; defaultValue = "应用预览" }
+                )
+            ) { backStackEntry ->
+                val url = backStackEntry.arguments?.getString("url")?.let {
+                    java.net.URLDecoder.decode(it, "UTF-8")
+                } ?: return@composable
+                val title = backStackEntry.arguments?.getString("title")?.let {
+                    java.net.URLDecoder.decode(it, "UTF-8")
+                } ?: "应用预览"
+                WebViewScreen(
+                    url = url,
+                    title = title,
                     onBackClick = { navController.popBackStack() }
                 )
             }

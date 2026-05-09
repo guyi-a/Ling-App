@@ -5,6 +5,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -131,6 +132,47 @@ class SSEManager(private val tokenProvider: () -> String?) {
     }
 
     /**
+     * 尝试重连 SSE 流（GET /api/chat/{session_id}/resume?subscribe_only=true）
+     * 返回 204 表示后端无活跃流（不需要重连），返回 null
+     */
+    fun connectResume(sessionId: String): Flow<SSEEvent> = callbackFlow {
+        val url = "${ApiConfig.BASE_URL}/api/chat/$sessionId/resume?subscribe_only=true"
+
+        val requestBuilder = Request.Builder()
+            .url(url)
+            .get()
+            .header("Accept", "text/event-stream")
+
+        val token = tokenProvider()
+        if (token != null) {
+            requestBuilder.header("Authorization", "Bearer $token")
+        }
+
+        val request = requestBuilder.build()
+
+        launch(Dispatchers.IO) {
+            try {
+                val response = sseClient.newCall(request).execute()
+                if (response.code == 204) {
+                    close()
+                    return@launch
+                }
+                val reader = response.body?.charStream()?.buffered()
+                if (reader != null) {
+                    parseSSEStreamCallback(reader, this@callbackFlow)
+                } else {
+                    close()
+                }
+            } catch (e: Exception) {
+                trySend(SSEEvent.ErrorEvent("重连失败: ${e.message}"))
+                close()
+            }
+        }
+
+        awaitClose {}
+    }
+
+    /**
      * 解析 SSE 流（用于 callbackFlow）
      */
     private fun parseSSEStreamCallback(reader: BufferedReader, scope: kotlinx.coroutines.channels.ProducerScope<SSEEvent>) {
@@ -226,40 +268,26 @@ class SSEManager(private val tokenProvider: () -> String?) {
         }
     }
 
-    /**
-     * 解析 SSE 事件
-     */
     private fun parseEvent(eventType: String, data: String): SSEEvent? {
         return try {
             when (eventType) {
-                "session" -> {
-                    json.decodeFromString<SSEEvent.SessionEvent>(data)
-                }
+                "session" -> json.decodeFromString<SSEEvent.SessionEvent>(data)
                 "token" -> {
                     val tokenData = json.parseToJsonElement(data).jsonObject["text"]?.jsonPrimitive?.content ?: ""
                     SSEEvent.TokenEvent(tokenData)
                 }
-                "tool_start" -> {
-                    json.decodeFromString<SSEEvent.ToolStartEvent>(data)
-                }
-                "tool_end" -> {
-                    json.decodeFromString<SSEEvent.ToolEndEvent>(data)
-                }
-                "approval_required" -> {
-                    json.decodeFromString<SSEEvent.ApprovalRequiredEvent>(data)
-                }
-                "approval_rejected" -> {
-                    json.decodeFromString<SSEEvent.ApprovalRejectedEvent>(data)
-                }
-                "done" -> {
-                    json.decodeFromString<SSEEvent.DoneEvent>(data)
-                }
-                "cancelled" -> {
-                    SSEEvent.CancelledEvent
-                }
-                "error" -> {
-                    json.decodeFromString<SSEEvent.ErrorEvent>(data)
-                }
+                "model_start" -> SSEEvent.ModelStartEvent
+                "tool_start" -> json.decodeFromString<SSEEvent.ToolStartEvent>(data)
+                "tool_end" -> json.decodeFromString<SSEEvent.ToolEndEvent>(data)
+                "tool_generating" -> json.decodeFromString<SSEEvent.ToolGeneratingEvent>(data)
+                "approval_required" -> json.decodeFromString<SSEEvent.ApprovalRequiredEvent>(data)
+                "approval_rejected" -> json.decodeFromString<SSEEvent.ApprovalRejectedEvent>(data)
+                "handoff" -> json.decodeFromString<SSEEvent.HandoffEvent>(data)
+                "compacting" -> SSEEvent.CompactingEvent
+                "compacting_done" -> SSEEvent.CompactingDoneEvent
+                "done" -> json.decodeFromString<SSEEvent.DoneEvent>(data)
+                "cancelled" -> SSEEvent.CancelledEvent
+                "error" -> json.decodeFromString<SSEEvent.ErrorEvent>(data)
                 else -> null
             }
         } catch (e: Exception) {

@@ -2,8 +2,8 @@ package com.guyi.demo1.data.repository
 
 import android.content.Context
 import com.guyi.demo1.data.api.AuthApi
-import com.guyi.demo1.data.local.TokenManager
 import com.guyi.demo1.data.api.ChangePasswordRequest
+import com.guyi.demo1.data.local.TokenManager
 import com.guyi.demo1.data.model.LoginRequest
 import com.guyi.demo1.data.model.RegisterRequest
 import com.guyi.demo1.data.model.User
@@ -25,6 +25,7 @@ class AuthRepository(
         return try {
             val response = authApi.login(LoginRequest(username, password))
             tokenManager.saveToken(response.accessToken)
+            tokenManager.saveRefreshToken(response.refreshToken)
             tokenManager.saveUserInfo(response.userId, response.username)
             val user = User(
                 userId = response.userId,

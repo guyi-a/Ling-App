@@ -31,7 +31,8 @@ data class ChatUiState(
     val messages: List<Message> = emptyList(),
     val isStreaming: Boolean = false,
     val currentSessionId: String? = null,
-    val error: String? = null
+    val error: String? = null,
+    val streamingStatus: String? = null // "thinking" | "compacting" | "handoff:xxx" | null
 )
 
 /**
@@ -71,49 +72,83 @@ class ChatViewModel(
             if (result.isSuccess) {
                 val history = result.getOrNull()
                 if (history != null) {
-                    // Step 1: 转换每条消息为带 parts 的 Message，跳过 tool 角色
-                    val rawMessages = history.messages
-                        .filter { it.role == "user" || it.role == "assistant" }
-                        .mapIndexed { idx, historyMsg ->
-                            val parts = mutableListOf<MessagePart>()
+                    val all = history.messages
 
-                            // 解析 extra_data
-                            val toolCalls = parseToolCalls(historyMsg.extraData)
+                    // Step 1: 转换 user / assistant 消息为带 parts 的 Message
+                    // 用 origIdx → rawIdx 映射，方便后面按原顺序回填 tool_output
+                    val rawMessages = mutableListOf<Message>()
+                    val origToRaw = mutableMapOf<Int, Int>()
+                    all.forEachIndexed { origIdx, historyMsg ->
+                        if (historyMsg.role != "user" && historyMsg.role != "assistant") return@forEachIndexed
 
-                            if (historyMsg.role == "assistant" && toolCalls.isNotEmpty()) {
-                                // assistant 消息带 tool_calls：先文本，再工具
-                                if (historyMsg.content.isNotBlank()) {
-                                    parts.add(MessagePart(type = "text", content = historyMsg.content))
-                                }
-                                toolCalls.forEach { toolName ->
-                                    parts.add(MessagePart(
-                                        type = "tool",
-                                        toolName = toolName,
-                                        toolStatus = "done"
-                                    ))
-                                }
-                            } else {
-                                // 普通消息
-                                if (historyMsg.content.isNotBlank()) {
-                                    parts.add(MessagePart(type = "text", content = historyMsg.content))
-                                }
+                        val parts = mutableListOf<MessagePart>()
+                        val toolCalls = parseToolCalls(historyMsg.extraData)
+                        val handoffInfo = parseHandoff(historyMsg.extraData)
+
+                        if (historyMsg.role == "assistant" && toolCalls.isNotEmpty()) {
+                            if (historyMsg.content.isNotBlank()) {
+                                parts.add(MessagePart(type = "text", content = historyMsg.content))
                             }
+                            toolCalls.forEach { info ->
+                                parts.add(MessagePart(
+                                    type = "tool",
+                                    toolName = info.name,
+                                    toolStatus = "done",
+                                    toolInput = info.input,
+                                    isSkill = info.isSkill
+                                ))
+                            }
+                        } else if (historyMsg.role == "assistant" && handoffInfo != null) {
+                            if (historyMsg.content.isNotBlank()) {
+                                parts.add(MessagePart(type = "text", content = historyMsg.content))
+                            }
+                            parts.add(MessagePart(
+                                type = "handoff",
+                                agentName = handoffInfo.first,
+                                handoffDirection = handoffInfo.second
+                            ))
+                        } else {
+                            if (historyMsg.content.isNotBlank()) {
+                                parts.add(MessagePart(type = "text", content = historyMsg.content))
+                            }
+                        }
 
+                        if (parts.isEmpty()) return@forEachIndexed
+
+                        origToRaw[origIdx] = rawMessages.size
+                        rawMessages.add(
                             Message(
-                                id = "history-$sessionId-$idx",
+                                id = "history-$sessionId-$origIdx",
                                 messageId = historyMsg.messageId,
                                 role = historyMsg.role,
                                 parts = parts
                             )
-                        }
-                        .filter { it.parts.isNotEmpty() }
+                        )
+                    }
 
-                    // Step 2: 合并连续同角色消息
+                    // Step 2: 回填 tool 消息内容到前一条 assistant 的第一个缺 output 的 tool part
+                    all.forEachIndexed { origIdx, m ->
+                        if (m.role == "tool" && m.content.isNotBlank()) {
+                            for (j in origIdx - 1 downTo 0) {
+                                val rawIdx = origToRaw[j] ?: continue
+                                val assistantMsg = rawMessages[rawIdx]
+                                if (assistantMsg.role != "assistant") continue
+                                val partsMut = assistantMsg.parts.toMutableList()
+                                val target = partsMut.indexOfFirst { it.type == "tool" && it.toolOutput == null }
+                                if (target >= 0) {
+                                    partsMut[target] = partsMut[target].copy(toolOutput = m.content)
+                                    rawMessages[rawIdx] = assistantMsg.copy(parts = partsMut)
+                                }
+                                break
+                            }
+                        }
+                    }
+
+                    // Step 3: 合并连续同角色消息
                     val mergedMessages = mutableListOf<Message>()
                     for (msg in rawMessages) {
                         val lastMsg = mergedMessages.lastOrNull()
                         if (lastMsg != null && lastMsg.role == msg.role) {
-                            // 合并 parts 到上一条消息
                             mergedMessages[mergedMessages.lastIndex] = lastMsg.copy(
                                 parts = lastMsg.parts + msg.parts
                             )
@@ -131,10 +166,18 @@ class ChatViewModel(
         }
     }
 
+    /** 从 extra_data 解析出来的工具调用信息 */
+    private data class ToolCallInfo(
+        val name: String,  // 保留原始 name（Skill 就是 Skill）
+        val input: kotlinx.serialization.json.JsonObject?,
+        val isSkill: Boolean
+    )
+
     /**
-     * 从 extra_data JSON 字符串解析 tool_calls 名称列表
+     * 从 extra_data JSON 字符串解析 tool_calls
+     * Skill 保留原始名，args 作为 toolInput，isSkill = true
      */
-    private fun parseToolCalls(extraData: String?): List<String> {
+    private fun parseToolCalls(extraData: String?): List<ToolCallInfo> {
         if (extraData.isNullOrBlank()) return emptyList()
         return try {
             val jsonElement = json.parseToJsonElement(extraData)
@@ -142,15 +185,32 @@ class ChatViewModel(
             toolCalls.mapNotNull { tc ->
                 val obj = tc.jsonObject
                 val name = obj["name"]?.jsonPrimitive?.content ?: return@mapNotNull null
-                // 如果是 Skill 工具，从 args 中提取实际技能名
-                if (name == "Skill") {
-                    obj["args"]?.jsonObject?.get("skill")?.jsonPrimitive?.content ?: name
-                } else {
-                    name
-                }
+                val args = obj["args"]?.let { it as? kotlinx.serialization.json.JsonObject }
+                ToolCallInfo(
+                    name = name,
+                    input = args,
+                    isSkill = name == "Skill"
+                )
             }
         } catch (e: Exception) {
             emptyList()
+        }
+    }
+
+    /**
+     * 从 extra_data JSON 字符串解析 handoff 信息
+     * @return Pair(agentName, direction) 或 null
+     */
+    private fun parseHandoff(extraData: String?): Pair<String, String>? {
+        if (extraData.isNullOrBlank()) return null
+        return try {
+            val jsonElement = json.parseToJsonElement(extraData)
+            val handoff = jsonElement.jsonObject["handoff"]?.jsonObject ?: return null
+            val to = handoff["to"]?.jsonPrimitive?.content ?: return null
+            val direction = handoff["direction"]?.jsonPrimitive?.content ?: "to"
+            Pair(to, direction)
+        } catch (e: Exception) {
+            null
         }
     }
 
@@ -188,7 +248,7 @@ class ChatViewModel(
             // 开始 SSE 流式接收
             streamingJob = viewModelScope.launch {
                 try {
-                    val url = "http://10.0.2.2:9000/api/chat/stream"
+                    val url = "${com.guyi.demo1.data.network.ApiConfig.BASE_URL}/api/chat/stream"
 
                     // 构建请求体
                     val requestBody = buildJsonObject {
@@ -207,120 +267,230 @@ class ChatViewModel(
 
                     val eventFlow = sseManager.connectPost(url, requestBody)
 
-                    var accumulated = ""
-                    var lastPartWasTool = false
+                    val streamState = StreamState(aiMessageId)
+                    var completed = false
 
                     eventFlow.collect { event ->
-                        when (event) {
-                            is SSEEvent.SessionEvent -> {
-                                // 更新会话 ID
-                                _uiState.value = _uiState.value.copy(
-                                    currentSessionId = event.sessionId
-                                )
-                                // 保存用户消息的 message_id
-                                event.userMessageId?.let { msgId ->
-                                    updateMessageId(userMessage.id, msgId)
-                                }
-                            }
-                            is SSEEvent.TokenEvent -> {
-                                if (lastPartWasTool) {
-                                    accumulated = ""
-                                    lastPartWasTool = false
-                                }
-                                accumulated += event.text
-                                updateAIMessage(aiMessageId) { msg ->
-                                    val parts = msg.parts.toMutableList()
-                                    if (parts.isNotEmpty() && parts.last().type == "text") {
-                                        parts[parts.lastIndex] = MessagePart(
-                                            type = "text",
-                                            content = accumulated
-                                        )
-                                    } else {
-                                        parts.add(MessagePart(type = "text", content = accumulated))
-                                    }
-                                    msg.copy(parts = parts)
-                                }
-                            }
-                            is SSEEvent.ToolStartEvent -> {
-                                lastPartWasTool = true
-                                updateAIMessage(aiMessageId) { msg ->
-                                    msg.copy(
-                                        parts = msg.parts + MessagePart(
-                                            type = "tool",
-                                            toolName = event.toolName,
-                                            toolStatus = "pending"
-                                        )
-                                    )
-                                }
-                            }
-                            is SSEEvent.ToolEndEvent -> {
-                                updateAIMessage(aiMessageId) { msg ->
-                                    val parts = msg.parts.toMutableList()
-                                    for (i in parts.lastIndex downTo 0) {
-                                        if (parts[i].type == "tool" &&
-                                            parts[i].toolName == event.toolName &&
-                                            parts[i].toolStatus == "pending"
-                                        ) {
-                                            parts[i] = parts[i].copy(toolStatus = "done")
-                                            break
-                                        }
-                                    }
-                                    msg.copy(parts = parts)
-                                }
-                            }
-                            is SSEEvent.ApprovalRequiredEvent -> {
-                                // 更新消息状态
-                                updateAIMessage(aiMessageId) { msg ->
-                                    msg.copy(
-                                        isStreaming = false,
-                                        approvalRequest = ApprovalRequest(
-                                            requestId = event.requestId,
-                                            toolName = event.toolName,
-                                            toolInput = event.toolInput
-                                        )
-                                    )
-                                }
-
-                                // 暂停流式状态，等待用户审批
-                                _uiState.value = _uiState.value.copy(isStreaming = false)
-
-                            }
-                            is SSEEvent.DoneEvent -> {
-                                updateMessageId(aiMessageId, event.assistantMessageId)
-                                updateAIMessage(aiMessageId) { msg ->
-                                    msg.copy(isStreaming = false, approvalRequest = null)
-                                }
-                                _uiState.value = _uiState.value.copy(isStreaming = false)
-                            }
-                            is SSEEvent.ErrorEvent -> {
-                                updateAIMessage(aiMessageId) { msg ->
-                                    msg.copy(
-                                        isStreaming = false,
-                                        parts = msg.parts + MessagePart(
-                                            type = "text",
-                                            content = "\n\n_错误：${event.message}_"
-                                        )
-                                    )
-                                }
-                                _uiState.value = _uiState.value.copy(isStreaming = false)
-                            }
-                            else -> {}
-                        }
+                        val result = handleSSEEvent(event, streamState, userMessage.id)
+                        if (result == EventResult.STREAM_END) completed = true
                     }
+
+                    // 流结束但不是正常完成（可能是网络断开），尝试 resume
+                    if (!completed) {
+                        tryResumeStream(streamState)
+                    }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
                 } catch (e: Exception) {
-                    _uiState.value = _uiState.value.copy(
-                        isStreaming = false,
-                        error = e.message
-                    )
+                    // 连接异常，尝试 resume
+                    val sessionId = _uiState.value.currentSessionId
+                    if (sessionId != null && _uiState.value.isStreaming) {
+                        tryResumeStream(StreamState(aiMessageId))
+                    } else {
+                        _uiState.value = _uiState.value.copy(
+                            isStreaming = false,
+                            error = e.message
+                        )
+                    }
                 }
             }
         }
     }
 
-    /**
-     * 停止流式生成
-     */
+    private enum class EventResult { CONTINUE, STREAM_END }
+
+    private class StreamState(val aiMessageId: String) {
+        var accumulated = ""
+        var lastPartWasTool = false
+        var userLocalId: String? = null
+    }
+
+    private fun handleSSEEvent(
+        event: SSEEvent,
+        state: StreamState,
+        userLocalId: String? = null
+    ): EventResult {
+        val aiMessageId = state.aiMessageId
+        when (event) {
+            is SSEEvent.SessionEvent -> {
+                _uiState.value = _uiState.value.copy(currentSessionId = event.sessionId)
+                if (userLocalId != null) {
+                    event.userMessageId?.let { updateMessageId(userLocalId, it) }
+                }
+            }
+            is SSEEvent.ModelStartEvent -> {
+                _uiState.value = _uiState.value.copy(streamingStatus = "thinking")
+            }
+            is SSEEvent.TokenEvent -> {
+                _uiState.value = _uiState.value.copy(streamingStatus = null)
+                if (state.lastPartWasTool) {
+                    state.accumulated = ""
+                    state.lastPartWasTool = false
+                }
+                state.accumulated += event.text
+                val text = state.accumulated
+                updateAIMessage(aiMessageId) { msg ->
+                    val parts = msg.parts.toMutableList()
+                    if (parts.isNotEmpty() && parts.last().type == "text") {
+                        parts[parts.lastIndex] = MessagePart(type = "text", content = text)
+                    } else {
+                        parts.add(MessagePart(type = "text", content = text))
+                    }
+                    msg.copy(parts = parts)
+                }
+            }
+            is SSEEvent.ToolGeneratingEvent -> {
+                // 事件顺序：tool_generating → tool_start → tool_end
+                // 先 push 一个 generating 占位（只有 toolName，没有 input）
+                _uiState.value = _uiState.value.copy(streamingStatus = null)
+                state.lastPartWasTool = true
+                updateAIMessage(aiMessageId) { msg ->
+                    msg.copy(parts = msg.parts + MessagePart(
+                        type = "tool",
+                        toolName = event.toolName,
+                        toolStatus = "generating"
+                    ))
+                }
+            }
+            is SSEEvent.ToolStartEvent -> {
+                // 找最后一个 generating 占位升级为 pending；没有就新建
+                state.lastPartWasTool = true
+                val isSkill = event.toolName == "Skill"
+                updateAIMessage(aiMessageId) { msg ->
+                    val parts = msg.parts.toMutableList()
+                    var upgraded = false
+                    for (i in parts.lastIndex downTo 0) {
+                        if (parts[i].type == "tool" && parts[i].toolStatus == "generating") {
+                            parts[i] = parts[i].copy(
+                                toolName = event.toolName,
+                                toolStatus = "pending",
+                                toolInput = event.toolInput,
+                                isSkill = isSkill
+                            )
+                            upgraded = true
+                            break
+                        }
+                    }
+                    if (!upgraded) {
+                        parts.add(MessagePart(
+                            type = "tool",
+                            toolName = event.toolName,
+                            toolStatus = "pending",
+                            toolInput = event.toolInput,
+                            isSkill = isSkill
+                        ))
+                    }
+                    msg.copy(parts = parts)
+                }
+            }
+            is SSEEvent.ToolEndEvent -> {
+                // 找最后一个 pending/generating 的 tool part 标 done + 保存 output
+                // 不再用 toolName 匹配（Skill 的 displayName 可能变化会导致匹配失败）
+                updateAIMessage(aiMessageId) { msg ->
+                    val parts = msg.parts.toMutableList()
+                    for (i in parts.lastIndex downTo 0) {
+                        if (parts[i].type == "tool"
+                            && (parts[i].toolStatus == "pending" || parts[i].toolStatus == "generating")
+                        ) {
+                            parts[i] = parts[i].copy(
+                                toolStatus = "done",
+                                toolOutput = event.toolOutput
+                            )
+                            break
+                        }
+                    }
+                    msg.copy(parts = parts)
+                }
+            }
+            is SSEEvent.HandoffEvent -> {
+                _uiState.value = _uiState.value.copy(streamingStatus = "handoff:${event.to}")
+                updateAIMessage(aiMessageId) { msg ->
+                    msg.copy(parts = msg.parts + MessagePart(
+                        type = "handoff", agentName = event.to, handoffDirection = event.direction
+                    ))
+                }
+            }
+            is SSEEvent.CompactingEvent -> {
+                _uiState.value = _uiState.value.copy(streamingStatus = "compacting")
+            }
+            is SSEEvent.CompactingDoneEvent -> {
+                _uiState.value = _uiState.value.copy(streamingStatus = null)
+            }
+            is SSEEvent.ApprovalRequiredEvent -> {
+                updateAIMessage(aiMessageId) { msg ->
+                    msg.copy(
+                        isStreaming = false,
+                        approvalRequest = ApprovalRequest(
+                            requestId = event.requestId,
+                            toolName = event.toolName,
+                            toolInput = event.toolInput
+                        )
+                    )
+                }
+                _uiState.value = _uiState.value.copy(isStreaming = false, streamingStatus = null)
+            }
+            is SSEEvent.DoneEvent -> {
+                event.assistantMessageId?.let { updateMessageId(aiMessageId, it) }
+                updateAIMessage(aiMessageId) { msg ->
+                    msg.copy(isStreaming = false, approvalRequest = null)
+                }
+                _uiState.value = _uiState.value.copy(isStreaming = false, streamingStatus = null)
+                return EventResult.STREAM_END
+            }
+            is SSEEvent.ErrorEvent -> {
+                updateAIMessage(aiMessageId) { msg ->
+                    msg.copy(
+                        isStreaming = false,
+                        parts = msg.parts + MessagePart(
+                            type = "text", content = "\n\n_错误：${event.message}_"
+                        )
+                    )
+                }
+                _uiState.value = _uiState.value.copy(isStreaming = false, streamingStatus = null)
+                return EventResult.STREAM_END
+            }
+            else -> {}
+        }
+        return EventResult.CONTINUE
+    }
+
+    private suspend fun tryResumeStream(state: StreamState, maxRetries: Int = 3) {
+        val sessionId = _uiState.value.currentSessionId ?: return
+        var retryCount = 0
+
+        while (retryCount < maxRetries && _uiState.value.isStreaming) {
+            retryCount++
+            val backoff = (1000L * retryCount).coerceAtMost(5000L)
+            kotlinx.coroutines.delay(backoff)
+
+            try {
+                var completed = false
+                sseManager.connectResume(sessionId).collect { event ->
+                    val result = handleSSEEvent(event, state)
+                    if (result == EventResult.STREAM_END) completed = true
+                }
+                if (completed) return
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // 重试
+            }
+        }
+
+        // 重试耗尽，标记结束
+        if (_uiState.value.isStreaming) {
+            updateAIMessage(state.aiMessageId) { msg ->
+                msg.copy(isStreaming = false)
+            }
+            _uiState.value = _uiState.value.copy(
+                isStreaming = false,
+                streamingStatus = null
+            )
+        }
+    }
+
     fun stopStreaming() {
+        val sessionId = _uiState.value.currentSessionId
         streamingJob?.cancel()
         streamingJob = null
         _uiState.value = _uiState.value.copy(
@@ -329,22 +499,33 @@ class ChatViewModel(
                 if (msg.isStreaming) msg.copy(isStreaming = false) else msg
             }
         )
+        // 通知后端停止 Agent
+        if (sessionId != null) {
+            viewModelScope.launch {
+                try {
+                    chatApi.stopGeneration(sessionId)
+                } catch (_: Exception) {}
+            }
+        }
     }
 
-    /**
-     * 审批工具调用
-     */
-    fun approveToolUse(requestId: String, approved: Boolean) {
+    fun approveToolUse(requestId: String, approved: Boolean, alwaysAllow: Boolean = false) {
+        val toolName = _uiState.value.messages
+            .mapNotNull { it.approvalRequest }
+            .firstOrNull { it.requestId == requestId }
+            ?.toolName
+
         viewModelScope.launch {
             try {
-                val response = chatApi.approveToolUse(
+                chatApi.approveToolUse(
                     com.guyi.demo1.data.api.ApprovalRequest(
                         request_id = requestId,
-                        approved = approved
+                        approved = approved,
+                        always_allow = alwaysAllow && approved,
+                        tool_name = if (alwaysAllow && approved) toolName else null
                     )
                 )
 
-                // 清除当前消息的审批请求状态
                 _uiState.value = _uiState.value.copy(
                     messages = _uiState.value.messages.map { msg ->
                         if (msg.approvalRequest?.requestId == requestId) {
@@ -353,12 +534,8 @@ class ChatViewModel(
                             msg
                         }
                     },
-                    // 如果审批通过，恢复流式状态
                     isStreaming = approved
                 )
-
-                // 如果审批通过，流会自动继续发送 token
-                // 如果拒绝，会收到 approval_rejected 事件
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     error = "审批失败: ${e.message}"

@@ -1,24 +1,35 @@
 package com.guyi.demo1.ui.components
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /**
- * 空状态组件 - 用于展示无数据的友好提示
+ * 空状态组件 — Warm Calm 风格
  *
- * @param icon 图标 Emoji，默认 📭
- * @param title 标题文字
- * @param description 描述文字
- * @param actionText 操作按钮文字（可选）
- * @param onAction 操作按钮点击事件（可选）
- * @param modifier 修饰符
+ * 旧接口保持：icon 参数是 emoji 字符串。当 icon == "💬" 时用 ChatBubbleOutline，
+ * 否则默认用 Inbox 图标。主要让聊天页空状态有精致视感。
  */
 @Composable
 fun EmptyState(
@@ -29,71 +40,69 @@ fun EmptyState(
     onAction: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    val cs = MaterialTheme.colorScheme
+    val iconVec = when (icon) {
+        "💬" -> Icons.Outlined.ChatBubbleOutline
+        else -> Icons.Outlined.Inbox
+    }
+
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(24.dp),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        Column(
+        // 图标容器（圆形 primary 透明底 + 主色图标）
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(cs.primary.copy(alpha = 0.10f)),
+            contentAlignment = Alignment.Center
         ) {
-            // 图标
-            Text(
-                text = icon,
-                style = MaterialTheme.typography.displayMedium,
-                modifier = Modifier.padding(bottom = 16.dp)
+            Icon(
+                imageVector = iconVec,
+                contentDescription = null,
+                tint = cs.primary,
+                modifier = Modifier.size(26.dp)
             )
+        }
 
-            // 标题
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+        Spacer(Modifier.height(14.dp))
+
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontWeight = FontWeight.SemiBold
+            ),
+            textAlign = TextAlign.Center,
+            color = cs.onBackground
+        )
+
+        Spacer(Modifier.height(6.dp))
+
+        Text(
+            text = description,
+            style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
+            textAlign = TextAlign.Center,
+            color = cs.onSurfaceVariant.copy(alpha = 0.8f)
+        )
+
+        if (actionText != null && onAction != null) {
+            Spacer(Modifier.height(16.dp))
+            LingPrimaryButton(
+                text = actionText,
+                onClick = onAction,
+                showArrow = true,
+                modifier = Modifier.fillMaxWidth(0.7f)
             )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // 描述
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-            )
-
-            // 操作按钮（可选）
-            if (actionText != null && onAction != null) {
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Button(
-                    onClick = onAction,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.height(48.dp)
-                ) {
-                    Text(
-                        text = actionText,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
         }
     }
 }
 
 /**
- * 简化版空状态 - 用于小范围展示
+ * 紧凑空状态 — 用于侧边栏等小范围场景
  */
 @Composable
 fun EmptyStateCompact(
@@ -101,24 +110,33 @@ fun EmptyStateCompact(
     message: String,
     modifier: Modifier = Modifier
 ) {
+    val cs = MaterialTheme.colorScheme
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(32.dp),
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = icon,
-            style = MaterialTheme.typography.displaySmall
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(cs.surfaceVariant.copy(alpha = 0.6f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Inbox,
+                contentDescription = null,
+                tint = cs.onSurfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        Spacer(Modifier.height(10.dp))
         Text(
             text = message,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
             textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            color = cs.onSurfaceVariant.copy(alpha = 0.75f)
         )
     }
 }
